@@ -11,8 +11,8 @@
 // [[Rcpp::export]]
 Rcpp::List MM_MH_cpp(const arma::vec& y, 
                      const arma::vec& prior_means,
-                     int n_iter = 500, 
-                     int burnin = 250,
+                     int n_iter = 1000, 
+                     int burnin = 500,
                      double proposal_sd = 0.15,  // FOR MEAN UPDATES ONLY
                      int seed = 123) {
   

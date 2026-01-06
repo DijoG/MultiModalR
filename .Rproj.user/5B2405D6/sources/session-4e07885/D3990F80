@@ -3,7 +3,7 @@
     "path": "D:/MultiModalR/src/MultiModalR.cpp",
     "project_path": "src/MultiModalR.cpp",
     "type": "cpp",
-    "hash": "2313726237",
+    "hash": "1831161201",
     "contents": "",
     "dirty": false,
     "created": 1767684245301.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "321,1",
-        "scrollLine": "297"
+        "cursorPosition": "13,40",
+        "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1767684271,
+    "lastKnownWriteTime": 1767692138,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1767684271397,
+    "last_content_update": 1767692138677,
     "read_only": false,
     "read_only_alternatives": []
 }
