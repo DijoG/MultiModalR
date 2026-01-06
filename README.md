@@ -127,7 +127,7 @@ ggplot(df, aes(x = Value, fill = Subpopulation)) +
 # Configure parallel processing
 cores <- length(unique(df$Subpopulation))   # cores = 3
 num_classes <- length(unique(df$Category))
-num_groups <- cores                         # N cores = N groups!
+num_groups <- cores                         # cores = groups!
 
 df <- 
   df %>%
