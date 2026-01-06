@@ -1,7 +1,7 @@
 # MultiModalR 🏔️ <img src="https://latex.codecogs.com/svg.latex?\color{green}w_1\mathcal{N}(\mu_1,\sigma_1^2)+w_2\mathcal{N}(\mu_2,\sigma_2^2)+w_3\mathcal{N}(\mu_3,\sigma_3^2)" height="30" align="center">
 
-[![R](https://img.shields.io/badge/R-≥4.0-blue?style=for-the-badge&logo=r)](https://www.r-project.org/)
-[![C++](https://img.shields.io/badge/C++-RcppArmadillo-blue?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
+[![R](https://img.shields.io/badge/R-≥4.0-green?style=for-the-badge&logo=r)](https://www.r-project.org/)
+[![C++](https://img.shields.io/badge/C++-RcppArmadillo-green?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
 
 
 **MultiModalR** is an R package for Bayesian probability estimation in categorical multimodal data. It performs subpopulation detection and probability assignment data using speed-optimized MCMC (Metropolis-Hastings-within-partial-Gibbs) implementation written in c++.
