@@ -2,15 +2,14 @@
 % Please edit documentation in R/MultiModalR.R
 \name{plot_VALIDATION}
 \alias{plot_VALIDATION}
-\title{Plot validation of subgroup assignments}
+\title{Plot validation of subgroup assignments (handles both balanced and imbalanced data)}
 \usage{
 plot_VALIDATION(
   csv_dir,
   observed_df,
   subpop_col = "Subpopulation",
   value_col = "Value",
-  pattern = "^df_",
-  n_per_group = 75
+  pattern = "^df_"
 )
 }
 \arguments{
@@ -23,12 +22,10 @@ plot_VALIDATION(
 \item{value_col}{Character, name of the value column in observed_df (default: "Value")}
 
 \item{pattern}{Pattern to match CSV files (default: "^df_")}
-
-\item{n_per_group}{Expected number of observations per group (default: 75)}
 }
 \value{
 ggplot object showing validation results
 }
 \description{
-Plot validation of subgroup assignments
+Plot validation of subgroup assignments (handles both balanced and imbalanced data)
 }

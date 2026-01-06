@@ -312,24 +312,22 @@ fuss_PARALLEL <- function(data, varCLASS, varY, method = "dpi",
   }
 }
 
-#' Plot validation of subgroup assignments
+#' Plot validation of subgroup assignments (handles both balanced and imbalanced data)
 #'
 #' @param csv_dir Directory containing CSV files from create_MM_output
 #' @param observed_df Original data frame with true subgroups
 #' @param subpop_col Character, name of the true subgroup column in observed_df (default: "Subpopulation")
 #' @param value_col Character, name of the value column in observed_df (default: "Value")
 #' @param pattern Pattern to match CSV files (default: "^df_")
-#' @param n_per_group Expected number of observations per group (default: 75)
 #' @return ggplot object showing validation results
 #' @export
 plot_VALIDATION <- function(csv_dir, observed_df, 
                             subpop_col = "Subpopulation", 
                             value_col = "Value",
-                            pattern = "^df_",
-                            n_per_group = 75) {
+                            pattern = "^df_") {
   
   # Check required packages
-  required = c("ggplot2", "dplyr", "readr", "purrr")
+  required = c("ggplot2", "dplyr", "readr", "purrr", "tidyr")
   missing = required[!required %in% installed.packages()]
   if(length(missing) > 0) {
     stop("Missing packages: ", paste(missing, collapse = ", "),
@@ -343,7 +341,7 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     stop("No CSV files found in ", csv_dir, " matching pattern: ", pattern)
   }
   
-  # Read and combine predicted data (EXACTLY as in your initial code)
+  # Read and combine predicted data
   predicted = purrr::map_dfr(FIL, ~ readr::read_csv(.x, 
                                                     col_types = "dddddddddddc", 
                                                     show_col_types = FALSE)) %>%
@@ -351,48 +349,92 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     dplyr::mutate(Main_Class = factor(as.character(Main_Class))) %>%
     dplyr::arrange(y)
   
-  # Prepare observed data (EXACTLY as in your initial code)
-  observed_df = observed_df %>% 
-    dplyr::arrange(.data[[value_col]])
-  
   # Extract true subgroup numbers (remove "Group " prefix if present)
   observed_df[[subpop_col]] = as.numeric(
     gsub("Group ", "", as.character(observed_df[[subpop_col]]))
   )
   
-  # CRITICAL: Your initial code assumes that after sorting by Value/y,
-  # the rows align perfectly between observed_df and predicted
-  # This requires both datasets to have the same observations in the same order
+  # Sort observed data by value
+  observed_df = observed_df %>% 
+    dplyr::arrange(.data[[value_col]])
   
+  # Debug information
+  message("Dataset sizes:")
+  message("  Predicted: ", nrow(predicted), " rows")
+  message("  Observed:  ", nrow(observed_df), " rows")
+  
+  # Check alignment
   if(nrow(observed_df) != nrow(predicted)) {
     warning("Observed (n=", nrow(observed_df), ") and predicted (n=", nrow(predicted), 
-            ") have different numbers of observations. Matching may be inaccurate.")
+            ") have different numbers of observations. Aligning by sorted values.")
   }
   
-  # Calculate matching accuracy (each subgroup has n_per_group records)
-  matching_indices = which(observed_df[[subpop_col]] == predicted$Assigned_Group)
+  # Take the smaller number of observations to compare
+  n_compare = min(nrow(predicted), nrow(observed_df))
   
-  # Calculate percentage per main class
-  main_class_percent = table(predicted$Main_Class[matching_indices]) / n_per_group * 100
+  if(n_compare == 0) {
+    stop("No observations to compare.")
+  }
   
-  label_data = data.frame(
-    Main_Class = names(main_class_percent),
-    Percent = format(round(as.numeric(main_class_percent), 1), nsmall = 1)
+  # Compare first n_compare observations (assumes sorted by value)
+  matching_indices = which(
+    observed_df[[subpop_col]][1:n_compare] == predicted$Assigned_Group[1:n_compare]
   )
   
   # Calculate overall accuracy
-  overall_accuracy = if(length(matching_indices) > 0) {
-    round(length(matching_indices) / nrow(predicted) * 100, 1)
-  } else 0
+  overall_accuracy = round(length(matching_indices) / n_compare * 100, 1)
+  message("Overall matching accuracy: ", overall_accuracy, "% (based on ", n_compare, " aligned observations)")
   
-  message("Overall matching accuracy: ", overall_accuracy, "%")
+  # Calculate accuracy per Main_Class (handles imbalanced data automatically)
+  main_classes = unique(predicted$Main_Class)
+  accuracy_list = list()
   
-  # Create color palette for groups
+  for(main_class in main_classes) {
+    pred_idx = which(predicted$Main_Class == main_class)
+    
+    if(length(pred_idx) == 0) {
+      accuracy_list[[as.character(main_class)]] = 0
+      next
+    }
+    
+    # Find corresponding observed indices (assumes same order after sorting)
+    if(length(pred_idx) <= n_compare) {
+      matches = sum(
+        observed_df[[subpop_col]][pred_idx] == predicted$Assigned_Group[pred_idx],
+        na.rm = TRUE
+      )
+      accuracy = ifelse(length(pred_idx) > 0, 
+                        round(matches / length(pred_idx) * 100, 1), 
+                        0)
+    } else {
+      accuracy = 0
+    }
+    
+    accuracy_list[[as.character(main_class)]] = accuracy
+    message("  ", main_class, ": ", accuracy, "%")
+  }
+  
+  # Create label data for plot
+  if(length(accuracy_list) > 0) {
+    label_data = data.frame(
+      Main_Class = names(accuracy_list),
+      Percent = format(round(unlist(accuracy_list), 1), nsmall = 1),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    label_data = data.frame(
+      Main_Class = as.character(main_classes),
+      Percent = "0.0",
+      stringsAsFactors = FALSE
+    )
+  }
+  
+  # Create color palette for subgroups
   n_groups = length(unique(predicted$Assigned_Group))
   group_colors = c("firebrick2", "forestgreen", "cyan3", "gold", "purple", "orange")
   group_colors = group_colors[1:min(n_groups, length(group_colors))]
   
-  # Plot 03 - validation (EXACTLY as in your initial code)
+  # Plot validation
   p = ggplot2::ggplot(predicted, ggplot2::aes(x = y)) +
     ggplot2::geom_density(col = NA, fill = "grey98", adjust = 0.8) +
     ggplot2::geom_jitter(ggplot2::aes(y = 0.05, color = factor(Assigned_Group)), 
@@ -400,7 +442,7 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     ggplot2::scale_color_manual(values = group_colors, 
                                 name = "Assigned Groups") +  
     ggplot2::theme_dark() +
-    ggplot2::labs(title = paste0("Validation of Subgroup Assignments (", overall_accuracy, "% overall)"), 
+    ggplot2::labs(title = paste0("Validation of Subgroup Assignments (", overall_accuracy, "% overall)"),
                   x = "Value", y = "Density") +
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
     ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
@@ -415,7 +457,8 @@ plot_VALIDATION <- function(csv_dir, observed_df,
                    axis.ticks = ggplot2::element_blank(),
                    panel.grid.major = ggplot2::element_blank(),
                    panel.grid.minor = ggplot2::element_blank(),
-                   plot.title = ggplot2::element_text(hjust = .5)) +
+                   plot.title = ggplot2::element_text(hjust = .5),
+                   plot.subtitle = ggplot2::element_text(hjust = .5, size = 10)) +
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
   
   return(p)
