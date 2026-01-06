@@ -1,0 +1,41 @@
+Package: MultiModalR
+Type: Package
+Title: Fast Bayesian Probability Estimation for Multimodal Categorical Data
+Version: 1.0.0
+Date: 2026-01-06
+Authors@R: 
+    c(person(given = "Gergo",
+             family = "Dioszegi",
+             role = c("aut", "cre"),
+             email = "dijogergo@gmail.com"),
+      person(given = "Based on",
+             family = "MultiModalR by DijoG",
+             role = "ctb"))
+Description: Fast Bayesian probability estimation for multimodal categorical data using 
+    speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs).
+    The package provides efficient algorithms for detecting subpopulations, estimating
+    mixture components, and assigning observations to subgroups with probability estimates.
+License: MIT + file LICENSE
+URL: https://github.com/DijoG/MultiModalR
+BugReports: https://github.com/DijoG/MultiModalR/issues
+Imports:
+    Rcpp (>= 1.0.10),
+    dplyr,
+    tidyr,
+    purrr,
+    readr,
+    ggplot2,
+    furrr,
+    future,
+    multimode,
+    truncnorm,
+    tictoc
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+LinkingTo: Rcpp, RcppArmadillo
+SystemRequirements: C++17
+RoxygenNote: 7.3.2
+Encoding: UTF-8
+NeedsCompilation: yes

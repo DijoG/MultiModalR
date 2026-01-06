@@ -1,0 +1,256 @@
+# Get libraries
+library(tidyverse);library(truncnorm)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Define nine categories with three subpopulations
+categories <- rep(LETTERS[1:9], each = 75)
+subpopulations <- rep(rep(c("Group 1", "Group 2", "Group 3"), each = 25), times = 9)
+
+# Generate data with single-peaked distributions within each subgroup
+values <- c(
+  rtruncnorm(25, a = 5, b = 10, mean = 6, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.5, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.7, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.2, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 5.8, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.4, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 8.9, sd = 0.6),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.1, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9.3, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.3, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.4, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 5.9, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.5, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 9.2, sd = 0.6),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.4, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.9, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9.5, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.0, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.6, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.3, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 9.6, sd = 0.6)
+)
+
+# Create data frame
+df <- data.frame(Category = categories, Subpopulation = subpopulations, Value = values)
+
+##---------------- 4 subpopulations ------------------------------------------------------------
+set.seed(123)
+
+# Define categories with FOUR subpopulations
+categories <- rep(LETTERS[1:9], each = 100)  # 9 categories × 100 obs each = 900 total
+subpopulations <- rep(rep(c("Group 1", "Group 2", "Group 3", "Group 4"), each = 25), times = 9)
+
+# Generate data with FOUR distinct subpopulations
+values <- c(
+  # Category A
+  rtruncnorm(25, a = 5, b = 10, mean = 6.0, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.8, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.6, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.4, sd = 0.3),
+  
+  # Category B
+  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.0, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.6, sd = 0.4),
+  
+  # Category C
+  rtruncnorm(25, a = 5, b = 10, mean = 5.8, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.7, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.6, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.5, sd = 0.5),
+  
+  # Category D
+  rtruncnorm(25, a = 5, b = 10, mean = 6.1, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.9, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.7, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.5, sd = 0.35),
+  
+  # Category E
+  rtruncnorm(25, a = 5, b = 10, mean = 6.3, sd = 0.45),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.2, sd = 0.45),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.1, sd = 0.45),
+  rtruncnorm(25, a = 5, b = 10, mean = 9.0, sd = 0.45),
+  
+  # Category F
+  rtruncnorm(25, a = 5, b = 10, mean = 5.9, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.8, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.7, sd = 0.4),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.6, sd = 0.4),
+  
+  # Category G
+  rtruncnorm(25, a = 5, b = 10, mean = 6.4, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.1, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.3),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.5, sd = 0.3),
+  
+  # Category H
+  rtruncnorm(25, a = 5, b = 10, mean = 6.0, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 6.9, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.5),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.7, sd = 0.5),
+  
+  # Category I
+  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.0, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.35),
+  rtruncnorm(25, a = 5, b = 10, mean = 8.6, sd = 0.35)
+)
+df <- data.frame(Category = categories, Subpopulation = subpopulations, Value = values)
+##---------------------------------------------------------------------------------------------
+
+# Plot 01 ~ subpopulations/subgroups not shown
+ggplot(df, aes(x = Value)) +
+  geom_density(color = NA, fill = "grey98", adjust = .8) +
+  facet_wrap(~Category) +
+  theme_dark() +
+  labs(title = "Multimodal Data ~ Density", 
+       x = "Value", y = "Density") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme(legend.position = "top",
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = .5))
+
+# Plot 02 ~ subgroups shown
+ggplot(df, aes(x = Value, fill = Subpopulation)) +
+  geom_density(alpha = 0.5, color = NA) +
+  scale_fill_manual(values = c("firebrick2", "forestgreen", "cyan3"), 
+                    name = "Subgroups") +
+  facet_wrap(~Category) +
+  theme_dark() +
+  labs(title = "Multimodal Data ~ Density with Subgroups", 
+       x = "Value", y = "Density") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  theme(legend.position = "top",
+        legend.key = element_rect(fill = "transparent", color = NA),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = .5)) +
+  guides(fill = guide_legend(override.aes = list(alpha = .6)))
+
+# TEST RUN
+
+# Configure parallel processing
+cores <- length(unique(df$Subpopulation))   # cores = 3
+num_classes <- length(unique(df$Category))
+num_groups <- cores
+
+df <- 
+  df %>%
+  mutate(GROUP = as.numeric(factor(Category, levels = unique(Category))) %% num_groups + 1)
+df$GROUP
+
+df_GROUPS <- 
+  df %>%
+  group_split(GROUP)
+
+library(furrr)
+
+# Run
+# Rcpp::compileAttributes(pkgdir = "D:/INLAMM", verbose = TRUE)
+# devtools::install("D:/INLAMM")
+
+tictoc::tic()
+results_fast <- INLAMM::fuss_PARALLEL(
+  data = df_GROUPS,
+  varCLASS = "Category",
+  varY = "Value",
+  method = "dpi",
+  within = 1,
+  maxNGROUP = 5,
+  out_dir = "D:/MINLAMM/INLAMM",  
+  n_workers = cores
+  #n_iter = 2000,
+  #burnin = 1000,
+  #proposal_sd = .2
+)
+tictoc::toc()
+# 9.09 sec elapsed
+
+tictoc::tic()
+results_fast <- INLAMM::fuss_PARALLEL(
+  data = df_GROUPS,
+  varCLASS = "Category",
+  varY = "Value",
+  method = "dpi",
+  within = 1,
+  maxNGROUP = 5,
+  out_dir = "D:/MINLAMM/MINLAM",  
+  n_workers = cores
+)
+tictoc::toc()
+
+# VALIDATION OF SUBGROUP ASSIGNMENT
+
+plot_VALIDATION("D:/MINLAMM/INLAMM", df, main_class_col = "Main_Class")
+
+FIL <- list.files("D:/MINLAMM/INLAMM", pattern = "^df_", full.names = TRUE) 
+
+predicted <- map_dfr(FIL, ~ read_csv(.x, col_types = "dddddddddddc", show_col_types = FALSE)) %>%
+  as.data.frame() %>%
+  mutate(Main_Class = factor(as.character(Main_Class))) %>%
+  arrange(y)
+
+# Prepare observed data
+df <- df %>% arrange(Value)
+df$Subpopulation <- as.numeric(str_remove(df$Subpopulation, "Group "))
+
+# Calculate matching accuracy (each subgroup has 75 records)
+matching_indices <- which(df$Subpopulation == predicted$Assigned_Group)
+main_class_percent <- table(predicted$Main_Class[matching_indices]) / 75 * 100
+
+label_data <- data.frame(
+  Main_Class = names(main_class_percent),
+  Percent = format(round(as.numeric(main_class_percent), 1), nsmall = 1)
+)
+
+# Plot 03 - validation
+ggplot(predicted, aes(x = y)) +
+  geom_density(col = NA, fill = "grey98", adjust = 0.8) +
+  geom_jitter(aes(y = 0.05, color = factor(Assigned_Group)), 
+              height = 0.05, size = 2, shape = 16, alpha = .5) + 
+  scale_color_manual(values = c("firebrick2", "forestgreen", "cyan3"), 
+                     name = "Assigned Groups") +  
+  theme_dark() +
+  labs(title = "Validation of Subgroup Assignments", 
+       x = "Value", y = "Density") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  facet_wrap(~ Main_Class, ncol = 3) +  
+  geom_text(data = label_data, aes(x = Inf, y = Inf, 
+                                   label = paste0(Percent, "%")), 
+            hjust = 1.2, vjust = 1.2, size = 5, fontface = "bold", 
+            inherit.aes = FALSE, col = "grey15") +  
+  theme(legend.position = "top",
+        legend.key = element_rect(fill = "transparent", color = NA),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = .5)) +
+  guides(color = guide_legend(override.aes = list(alpha = .7)))
+
+
+#######
+#######
+#######
+
+# Test with one category
+test_df <- df_GROUPS[[1]]  # First group
+
+# Test the function directly
+result_test <- INLAMM::get_PROBCLASS_MH(
+  data = test_df,
+  varCLASS = "Category",
+  varY = "Value",
+  method = "dpi",
+  within = 1,
+  maxNGROUP = 5,
+  df_prob = FALSE,
+  out_dir = NULL
+)
+
+cat("Direct test result:\n")
+if(is.null(result_test)) {
+  cat("Result is NULL\n")
+} else if(inherits(result_test, "error")) {
+  cat("Error:", result_test$message, "\n")
+} else {
+  print(head(result_test))
+}

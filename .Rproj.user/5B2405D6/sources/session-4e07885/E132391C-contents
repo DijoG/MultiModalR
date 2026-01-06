@@ -1,0 +1,28 @@
+# R files
+.Rhistory
+.RData
+.Ruserdata
+
+# RStudio
+.Rproj.user/
+
+# Package build files
+*.tar.gz
+*.Rcheck/
+
+# Auto-generated files
+man/*.Rd
+NAMESPACE
+R/RcppExports.R
+src/RcppExports.cpp
+src/*.o
+src/*.so
+src/*.dll
+
+# OS files
+.DS_Store
+
+# Documentation
+inst/doc/
+vignettes/*.html
+vignettes/*.pdf
