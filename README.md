@@ -4,7 +4,7 @@
 [![C++](https://img.shields.io/badge/C++-RcppArmadillo-green?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
 
 
-**MultiModalR** is an R package for Bayesian probability estimation in categorical multimodal data. It performs subpopulation detection and probability assignment data using speed-optimized MCMC (Metropolis-Hastings-within-partial-Gibbs) implementation written in c++.
+**MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using a fast C++ implementation of Metropolis-Hastings-within-partial-Gibbs sampling.
 
 ## Features
 
