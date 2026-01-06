@@ -181,7 +181,7 @@ A **Data CSV** file consists of the following fields (maxNGROUP = 5):
 
 ```r
 # Validate subgroup assignments
-plot_VALIDATION("D:/MINLAMM/INLAMM", df)
+plot_VALIDATION("D:/MultiModalR/test", df)
 ```
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_03.png">
 
