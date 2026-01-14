@@ -36,7 +36,7 @@ remotes::install_github("DijoG/MultiModalR")
 library(MultiModalR)
 
 # Prepare data and run analysis
-result <- MultiModalR::fuss_PARALLEL(
+MultiModalR::fuss_PARALLEL(
   data = df_GROUPS,
   varCLASS = "Category", 
   varY = "Value", 
