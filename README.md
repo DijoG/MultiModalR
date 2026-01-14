@@ -40,6 +40,7 @@ result <- MultiModalR::fuss_PARALLEL(
   data = df_GROUPS,
   varCLASS = "Category", 
   varY = "Value", 
+  varID = "ID",
   method = "dpi", 
   within = 1, 
   maxNGROUP = 5, 
@@ -78,7 +79,8 @@ values <- c(
 )
 
 # Create data frame
-df <- data.frame(Category = categories, Subpopulation = subpopulations, Value = values)
+df <- data.frame(Category = categories, Subpopulation = subpopulations, Value = values) %>%
+  mutate(ID = 1:nrow(.))    
 ```
 ### Data Visualization
 ```r
@@ -125,27 +127,18 @@ ggplot(df, aes(x = Value, fill = Subpopulation)) +
 ### Parallel Processing Setup 
 ```r
 # Configure parallel processing
-cores <- length(unique(df$Subpopulation))   # cores = 3
-num_classes <- length(unique(df$Category))
-num_groups <- cores                         # cores = groups!
-
-df <- 
-  df %>%
-  mutate(GROUP = as.numeric(factor(Category, levels = unique(Category))) %% num_groups + 1)
-
-df_GROUPS <- 
-  df %>%
-  group_split(GROUP)
+cores <- 3
 ```
 ### Running Analysis
 ```r
 library(furrr)
 
 # Analysis with probability output
-results_fast <- MultiModalR::fuss_PARALLEL(
-  data = df_GROUPS,
+MultiModalR::fuss_PARALLEL(
+  data = df,
   varCLASS = "Category",
   varY = "Value",
+  varID = "ID",
   method = "dpi",
   within = 1,
   maxNGROUP = 5,
@@ -181,7 +174,12 @@ A **Data CSV** file consists of the following fields (maxNGROUP = 5):
 
 ```r
 # Validate subgroup assignments
-plot_VALIDATION("D:/MultiModalR/test", df)
+MultiModalR::plot_VALIDATION(
+  "D:/MultiModalR/test", 
+  df, 
+  subpop_col = "Subpopulation", 
+  value_col = "Value",
+  id_col = "ID")
 ```
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_03.png">
 

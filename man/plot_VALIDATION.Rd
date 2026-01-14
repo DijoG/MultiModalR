@@ -9,7 +9,7 @@ plot_VALIDATION(
   observed_df,
   subpop_col = "Subpopulation",
   value_col = "Value",
-  id_col = NULL,
+  id_col = "ID",
   pattern = "^df_"
 )
 }
@@ -22,7 +22,7 @@ plot_VALIDATION(
 
 \item{value_col}{Character, name of the value column in observed_df (default: "Value")}
 
-\item{id_col}{Character, name of the ID column in observed_df (optional, for matching)}
+\item{id_col}{Character, name of the ID column in observed_df (default: "ID")}
 
 \item{pattern}{Pattern to match CSV files (default: "^df_")}
 }

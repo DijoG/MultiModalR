@@ -2,13 +2,13 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_PROBCLASS_MH}
 \alias{get_PROBCLASS_MH}
-\title{Fast version of get_PROBCLASS_MH}
+\title{Core function for mixture model MCMC with ID support}
 \usage{
 get_PROBCLASS_MH(
   data,
   varCLASS,
   varY,
-  varID = NULL,
+  varID,
   method = "dpi",
   within = 0.03,
   maxNGROUP = 5,
@@ -21,11 +21,11 @@ get_PROBCLASS_MH(
 \arguments{
 \item{data}{Input data frame}
 
-\item{varCLASS}{Character, category variable name}
+\item{varCLASS}{Character, category variable name (required)}
 
-\item{varY}{Character, value variable name}
+\item{varY}{Character, value variable name (required)}
 
-\item{varID}{Character, ID variable name (optional)}
+\item{varID}{Character, ID variable name (required)}
 
 \item{method}{Density estimator method}
 

@@ -78,21 +78,40 @@ group_MODES <- function(df, within = 0.03) {
 
 #' Fast MCMC for mixture models (C++ implementation)
 #' 
-#' Fixed version that prevents empty groups
-#' 
 #' @param y Numeric vector of data
 #' @param grp Number of mixture components
 #' @param prior_means Prior means for components (optional)
-#' @param ids Vector of IDs to preserve ordering (optional)
+#' @param ids Vector of IDs for validation (required)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param seed Random seed
 #' @return List with MCMC results
 #' @export
-MM_MH <- function(y, grp, prior_means = NULL, ids = NULL,
+MM_MH <- function(y, grp, prior_means = NULL, ids,
                   n_iter = 1000, burnin = 500,
                   proposal_sd = 0.15, seed = NULL) {
+  
+  # Validate IDs - they are required
+  if(missing(ids)) {
+    stop("'ids' argument is required for validation.")
+  }
+  
+  if(is.null(ids)) {
+    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
+  }
+  
+  if(length(ids) != length(y)) {
+    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
+  }
+  
+  if(any(is.na(ids))) {
+    warning("NA values found in IDs. These will be preserved but may cause issues in validation.")
+  }
+  
+  if(any(duplicated(ids))) {
+    warning("Duplicate IDs found. This may cause issues in validation.")
+  }
   
   if(is.null(seed)) {
     seed = sample.int(.Machine$integer.max, 1)
@@ -108,12 +127,6 @@ MM_MH <- function(y, grp, prior_means = NULL, ids = NULL,
     prior_means = seq(min(y), max(y), length.out = grp)
   }
   
-  # Check ID length if provided
-  if(!is.null(ids) && length(ids) != length(y)) {
-    warning("ID length (", length(ids), ") doesn't match y length (", length(y), "). IDs will be omitted.")
-    ids = NULL
-  }
-  
   result = MM_MH_cpp(
     y = as.numeric(y),
     prior_means = as.numeric(prior_means),
@@ -123,12 +136,8 @@ MM_MH <- function(y, grp, prior_means = NULL, ids = NULL,
     seed = as.integer(seed)
   )
   
-  # Store the IDs in the result - ONLY if they match length
-  if(!is.null(ids) && length(ids) == length(y)) {
-    result$ids = ids
-  } else {
-    result$ids = NULL
-  }
+  # Store the IDs in the result
+  result$ids = ids
   
   return(result)
 }
@@ -218,14 +227,12 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   return(df)
 }
 
-#' Fast version of get_PROBCLASS_MH
-#' 
 #' Core function for mixture model MCMC with ID support
 #' 
 #' @param data Input data frame
-#' @param varCLASS Character, category variable name
-#' @param varY Character, value variable name
-#' @param varID Character, ID variable name (optional)
+#' @param varCLASS Character, category variable name (required)
+#' @param varY Character, value variable name (required)
+#' @param varID Character, ID variable name (required)
 #' @param method Density estimator method
 #' @param within Range parameter for mode grouping
 #' @param maxNGROUP Maximum number of groups
@@ -235,7 +242,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
-get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL, 
+get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
                              method = "dpi", within = 0.03, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
                              burnin = 500, proposal_sd = 0.15) {
@@ -253,9 +260,8 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
     stop("varY '", varY, "' not found in data")
   }
   
-  if(!is.null(varID) && !varID %in% names(data)) {
-    warning("varID '", varID, "' not found in data. IDs will not be included.")
-    varID = NULL
+  if(!varID %in% names(data)) {
+    stop("varID '", varID, "' not found in data")
   }
   
   categories = unique(data[[varCLASS]])
@@ -265,12 +271,8 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
     cat_data = data[data[[varCLASS]] == cat, ]
     y = cat_data[[varY]]
     
-    # Extract IDs if provided
-    if(!is.null(varID)) {
-      ids = cat_data[[varID]]
-    } else {
-      ids = NULL
-    }
+    # Extract IDs
+    ids = cat_data[[varID]]
     
     message("Processing category: ", cat)
     
@@ -297,7 +299,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
       y = y,
       grp = n_components,
       prior_means = prior_means,
-      ids = ids,  # Pass IDs here
+      ids = ids,  
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
@@ -332,10 +334,6 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
     combined_result = do.call(rbind, results)
     message("Analysis complete. Result has ", nrow(combined_result), " rows.")
     
-    if(!is.null(varID)) {
-      message("ID column included in output.")
-    }
-    
     return(combined_result)
   } else {
     message("Results written to: ", out_dir)
@@ -343,14 +341,12 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
   }
 }
 
-#' Fast parallel version
-#' 
 #' Parallel wrapper around get_PROBCLASS_MH
 #' 
 #' @param data Input data frame
-#' @param varCLASS Character, category variable name
-#' @param varY Character, value variable name
-#' @param varID Character, ID variable name (optional)
+#' @param varCLASS Character, category variable name (required)
+#' @param varY Character, value variable name (required)
+#' @param varID Character, ID variable name (required)
 #' @param method Density estimator method
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
@@ -361,7 +357,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID = NULL,
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
-fuss_PARALLEL <- function(data, varCLASS, varY, varID = NULL, 
+fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
                           method = "dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
@@ -380,9 +376,8 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID = NULL,
     stop("varY '", varY, "' not found in data")
   }
   
-  if(!is.null(varID) && !varID %in% names(data)) {
-    warning("varID '", varID, "' not found in data. IDs will not be included.")
-    varID = NULL
+  if(!varID %in% names(data)) {
+    stop("varID '", varID, "' not found in data")
   }
   
   # Split data by category
@@ -462,14 +457,14 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID = NULL,
 #' @param observed_df Original data frame with true subgroups
 #' @param subpop_col Character, name of the true subgroup column in observed_df (default: "Subpopulation")
 #' @param value_col Character, name of the value column in observed_df (default: "Value")
-#' @param id_col Character, name of the ID column in observed_df (optional, for matching)
+#' @param id_col Character, name of the ID column in observed_df (default: "ID")
 #' @param pattern Pattern to match CSV files (default: "^df_")
 #' @return ggplot object showing validation results
 #' @export
 plot_VALIDATION <- function(csv_dir, observed_df, 
                             subpop_col = "Subpopulation", 
                             value_col = "Value",
-                            id_col = NULL,
+                            id_col = "ID",
                             pattern = "^df_") {
   
   # Check required packages
@@ -490,129 +485,42 @@ plot_VALIDATION <- function(csv_dir, observed_df,
   # Read and combine predicted data
   predicted_list = list()
   for(f in FIL) {
-    # First read to check column names
-    temp_df = readr::read_csv(f, n_max = 1, show_col_types = FALSE)
-    
-    # Handle both with and without ID column
-    if("ID" %in% names(temp_df)) {
-      predicted_list[[f]] = readr::read_csv(f, 
-                                            col_types = cols(
-                                              ID = col_character(),
-                                              y = col_double(),
-                                              .default = col_double(),
-                                              Main_Class = col_character()
-                                            ), 
-                                            show_col_types = FALSE)
-    } else {
-      predicted_list[[f]] = readr::read_csv(f, 
-                                            col_types = "dddddddddddc",
-                                            show_col_types = FALSE)
-    }
+    predicted_list[[f]] = readr::read_csv(f, show_col_types = FALSE) %>%
+      as.data.frame() %>%
+      dplyr::mutate(Main_Class = as.character(Main_Class))
   }
   
   predicted = purrr::map_dfr(predicted_list, ~ .x) %>%
-    as.data.frame() %>%
-    dplyr::mutate(Main_Class = factor(as.character(Main_Class))) %>%
-    dplyr::arrange(y)
+    dplyr::mutate(Main_Class = gsub("__", "::", Main_Class))
   
-  # Extract true subgroup numbers (remove "Group " prefix if present)
+  # Extract true subgroup numbers
   observed_df[[subpop_col]] = as.numeric(
     gsub("Group ", "", as.character(observed_df[[subpop_col]]))
   )
   
-  # Sort observed data
-  if(!is.null(id_col) && id_col %in% names(observed_df)) {
-    # If ID column exists and predicted has ID, try to match by ID
-    observed_df = observed_df %>% 
-      dplyr::arrange(.data[[id_col]])
-  } else {
-    # Otherwise sort by value
-    observed_df = observed_df %>% 
-      dplyr::arrange(.data[[value_col]])
-  }
+  # Ensure ID columns are character type
+  observed_df[[id_col]] = as.character(observed_df[[id_col]])
+  predicted[[id_col]] = as.character(predicted[[id_col]])
   
-  # Debug information
-  message("Dataset sizes:")
-  message("  Predicted: ", nrow(predicted), " rows")
-  message("  Observed:  ", nrow(observed_df), " rows")
-  
-  # Matching logic
-  matching_indices = numeric(0)
-  
-  if(!is.null(id_col) && "ID" %in% names(predicted) && id_col %in% names(observed_df)) {
-    # Try to match by ID if available in both datasets
-    matched = dplyr::inner_join(observed_df, predicted, 
-                                by = c(id_col = "ID"))
-    if(nrow(matched) > 0) {
-      matching_indices = which(matched[[subpop_col]] == matched$Assigned_Group)
-      n_compare = nrow(matched)
-    } else {
-      # Fall back to value-based matching
-      n_compare = min(nrow(observed_df), nrow(predicted))
-      matching_indices = which(
-        observed_df[[subpop_col]][1:n_compare] == predicted$Assigned_Group[1:n_compare]
-      )
-    }
-  } else {
-    # Original value-based matching
-    n_compare = min(nrow(observed_df), nrow(predicted))
-    matching_indices = which(
-      observed_df[[subpop_col]][1:n_compare] == predicted$Assigned_Group[1:n_compare]
-    )
-  }
+  # Match by ID only
+  matched = dplyr::inner_join(observed_df, predicted, by = id_col)
   
   # Calculate overall accuracy
-  if(n_compare > 0) {
-    overall_accuracy = round(length(matching_indices) / n_compare * 100, 1)
-  } else {
-    overall_accuracy = 0
-  }
-  
-  message("Overall matching accuracy: ", overall_accuracy, "% (based on ", n_compare, " aligned observations)")
+  matched$correct = matched[[subpop_col]] == matched$Assigned_Group
+  overall_accuracy = round(mean(matched$correct, na.rm = TRUE) * 100, 1)
   
   # Calculate accuracy per Main_Class
-  main_classes = unique(predicted$Main_Class)
-  accuracy_list = list()
-  
-  for(main_class in main_classes) {
-    pred_idx = which(predicted$Main_Class == main_class)
-    
-    if(length(pred_idx) == 0) {
-      accuracy_list[[as.character(main_class)]] = 0
-      next
-    }
-    
-    # Find corresponding observed indices
-    if(length(pred_idx) <= n_compare) {
-      matches = sum(
-        observed_df[[subpop_col]][pred_idx] == predicted$Assigned_Group[pred_idx],
-        na.rm = TRUE
-      )
-      accuracy = ifelse(length(pred_idx) > 0, 
-                        round(matches / length(pred_idx) * 100, 1), 
-                        0)
-    } else {
-      accuracy = 0
-    }
-    
-    accuracy_list[[as.character(main_class)]] = accuracy
-    message("  ", main_class, ": ", accuracy, "%")
-  }
+  accuracy_by_class = matched %>%
+    group_by(Main_Class) %>%
+    summarize(
+      accuracy = round(mean(correct, na.rm = TRUE) * 100, 1),
+      n = n(),
+      .groups = 'drop'
+    )
   
   # Create label data for plot
-  if(length(accuracy_list) > 0) {
-    label_data = data.frame(
-      Main_Class = names(accuracy_list),
-      Percent = format(round(unlist(accuracy_list), 1), nsmall = 1),
-      stringsAsFactors = FALSE
-    )
-  } else {
-    label_data = data.frame(
-      Main_Class = as.character(main_classes),
-      Percent = "0.0",
-      stringsAsFactors = FALSE
-    )
-  }
+  label_data = accuracy_by_class %>%
+    mutate(Percent = format(accuracy, nsmall = 1))
   
   # Create color palette for subgroups
   n_groups = length(unique(predicted$Assigned_Group))

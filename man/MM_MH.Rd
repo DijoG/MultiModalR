@@ -8,7 +8,7 @@ MM_MH(
   y,
   grp,
   prior_means = NULL,
-  ids = NULL,
+  ids,
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
@@ -22,7 +22,7 @@ MM_MH(
 
 \item{prior_means}{Prior means for components (optional)}
 
-\item{ids}{Vector of IDs to preserve ordering (optional)}
+\item{ids}{Vector of IDs for validation (required)}
 
 \item{n_iter}{Number of MCMC iterations (default: 1000)}
 
@@ -36,5 +36,5 @@ MM_MH(
 List with MCMC results
 }
 \description{
-Fixed version that prevents empty groups
+Fast MCMC for mixture models (C++ implementation)
 }

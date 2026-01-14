@@ -2,13 +2,13 @@
 % Please edit documentation in R/MultiModalR.R
 \name{fuss_PARALLEL}
 \alias{fuss_PARALLEL}
-\title{Fast parallel version}
+\title{Parallel wrapper around get_PROBCLASS_MH}
 \usage{
 fuss_PARALLEL(
   data,
   varCLASS,
   varY,
-  varID = NULL,
+  varID,
   method = "dpi",
   within = 1,
   maxNGROUP = 5,
@@ -22,11 +22,11 @@ fuss_PARALLEL(
 \arguments{
 \item{data}{Input data frame}
 
-\item{varCLASS}{Character, category variable name}
+\item{varCLASS}{Character, category variable name (required)}
 
-\item{varY}{Character, value variable name}
+\item{varY}{Character, value variable name (required)}
 
-\item{varID}{Character, ID variable name (optional)}
+\item{varID}{Character, ID variable name (required)}
 
 \item{method}{Density estimator method}
 
