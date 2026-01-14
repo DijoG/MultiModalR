@@ -240,19 +240,33 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
   // Calculate assignments
   arma::ivec assigned_group(n);
   for(int i = 0; i < n; ++i) {
-    int best_comp = 0;
-    double best_prob = 0.0;
-    for(int k = 0; k < n_components; ++k) {
+    int best_comp = 1;  // ← START AT 1, NOT 0!
+    double best_prob = z_probs(i, 0);  // Initialize with first component
+    
+    for(int k = 1; k < n_components; ++k) {  // Start from k=1
       if(z_probs(i, k) > best_prob) {
         best_prob = z_probs(i, k);
         best_comp = k + 1;
       }
     }
+    
+    // Additional safety: ensure best_comp is valid
+    if(best_comp < 1 || best_comp > n_components) {
+      best_comp = 1;  // Default to first component
+    }
+    
     assigned_group(i) = best_comp;
   }
   
   // Calculate group statistics
   arma::vec min_assigned(n), max_assigned(n), mean_assigned(n), mode_assigned(n);
+  
+  // Ensure all assigned_group values are valid
+  for(int i = 0; i < n; ++i) {
+    if(assigned_group(i) < 1 || assigned_group(i) > n_components) {
+      assigned_group(i) = 1;
+    }
+  }
   
   for(int k = 0; k < n_components; ++k) {
     std::vector<double> group_values;
