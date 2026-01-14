@@ -9,6 +9,7 @@ plot_VALIDATION(
   observed_df,
   subpop_col = "Subpopulation",
   value_col = "Value",
+  id_col = NULL,
   pattern = "^df_"
 )
 }
@@ -20,6 +21,8 @@ plot_VALIDATION(
 \item{subpop_col}{Character, name of the true subgroup column in observed_df (default: "Subpopulation")}
 
 \item{value_col}{Character, name of the value column in observed_df (default: "Value")}
+
+\item{id_col}{Character, name of the ID column in observed_df (optional, for matching)}
 
 \item{pattern}{Pattern to match CSV files (default: "^df_")}
 }

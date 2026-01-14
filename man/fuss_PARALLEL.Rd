@@ -8,6 +8,7 @@ fuss_PARALLEL(
   data,
   varCLASS,
   varY,
+  varID = NULL,
   method = "dpi",
   within = 1,
   maxNGROUP = 5,
@@ -19,11 +20,13 @@ fuss_PARALLEL(
 )
 }
 \arguments{
-\item{data}{List of data frames (grouped by GROUP variable)}
+\item{data}{Input data frame}
 
 \item{varCLASS}{Character, category variable name}
 
 \item{varY}{Character, value variable name}
+
+\item{varID}{Character, ID variable name (optional)}
 
 \item{method}{Density estimator method}
 
@@ -45,5 +48,5 @@ fuss_PARALLEL(
 Data frame (if out_dir is NULL) or writes CSV files
 }
 \description{
-Fast parallel version
+Parallel wrapper around get_PROBCLASS_MH
 }

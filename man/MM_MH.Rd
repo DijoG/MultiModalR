@@ -8,6 +8,7 @@ MM_MH(
   y,
   grp,
   prior_means = NULL,
+  ids = NULL,
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
@@ -20,6 +21,8 @@ MM_MH(
 \item{grp}{Number of mixture components}
 
 \item{prior_means}{Prior means for components (optional)}
+
+\item{ids}{Vector of IDs to preserve ordering (optional)}
 
 \item{n_iter}{Number of MCMC iterations (default: 1000)}
 

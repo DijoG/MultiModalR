@@ -8,6 +8,7 @@ get_PROBCLASS_MH(
   data,
   varCLASS,
   varY,
+  varID = NULL,
   method = "dpi",
   within = 0.03,
   maxNGROUP = 5,
@@ -24,9 +25,11 @@ get_PROBCLASS_MH(
 
 \item{varY}{Character, value variable name}
 
-\item{method}{Density estimator method (for compatibility)}
+\item{varID}{Character, ID variable name (optional)}
 
-\item{within}{Range parameter (for compatibility)}
+\item{method}{Density estimator method}
+
+\item{within}{Range parameter for mode grouping}
 
 \item{maxNGROUP}{Maximum number of groups}
 
@@ -42,5 +45,5 @@ get_PROBCLASS_MH(
 Data frame or writes CSV files to out_dir
 }
 \description{
-Fast version of get_PROBCLASS_MH
+Core function for mixture model MCMC with ID support
 }
