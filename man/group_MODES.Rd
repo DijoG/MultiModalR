@@ -4,12 +4,12 @@
 \alias{group_MODES}
 \title{Group/merge modes if they are within a given range}
 \usage{
-group_MODES(df, within = 0.03)
+group_MODES(df, within = 0.1)
 }
 \arguments{
 \item{df}{data frame containing samples of a distribution in its 'Est_Mode' variable}
 
-\item{within}{numeric, range for grouping modes}
+\item{within}{numeric, range for grouping modes (default: 0.1)}
 }
 \value{
 data frame with grouped modes

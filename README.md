@@ -37,7 +37,7 @@ library(MultiModalR)
 
 # Prepare data and run analysis
 MultiModalR::fuss_PARALLEL(
-  data = df_GROUPS,
+  data = df,
   varCLASS = "Category", 
   varY = "Value", 
   varID = "ID",

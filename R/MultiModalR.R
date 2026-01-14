@@ -1,7 +1,7 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
 # Version: 1.0.0
 # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
-# Based on MINLAM (depreciated) by DijoG
+# Based on MINLAM (depreciated) by Gergő Diószegi
 
 #' @import Rcpp
 #' @importFrom Rcpp evalCpp
@@ -63,10 +63,10 @@ get_MODES <- function(y, nmod) {
 #' Group/merge modes if they are within a given range
 #'
 #' @param df data frame containing samples of a distribution in its 'Est_Mode' variable
-#' @param within numeric, range for grouping modes
+#' @param within numeric, range for grouping modes (default: 0.1)
 #' @return data frame with grouped modes
 #' @export
-group_MODES <- function(df, within = 0.03) {
+group_MODES <- function(df, within = 0.1) {
   df = df %>%
     dplyr::arrange(Est_Mode) %>%
     dplyr::mutate(group = cumsum(c(1, diff(Est_Mode) > within)))
