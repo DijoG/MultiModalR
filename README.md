@@ -41,12 +41,12 @@ MultiModalR::fuss_PARALLEL(
   varCLASS = "Category", 
   varY = "Value", 
   varID = "ID",
-  method = "dpi", 
+  method = "sj-dpi", 
   within = 1, 
   maxNGROUP = 5, 
-  df_prob = FALSE, 
   out_dir = ".../output", 
-  n_workers = 3
+  n_workers = 3,
+  sj_adjust = .5
 )
 ```
 ## Detailed Example
