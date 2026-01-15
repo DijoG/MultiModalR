@@ -7,6 +7,65 @@
 
 // [[Rcpp::depends(RcppArmadillo)]]
 
+// Helper function: sample from Dirichlet distribution
+arma::vec rdirichlet_cpp(const arma::vec& alpha, std::mt19937& rng) {
+  int K = alpha.n_elem;
+  arma::vec draws(K);
+  double sum_draws = 0.0;
+  
+  for(int k = 0; k < K; ++k) {
+    std::gamma_distribution<double> gamma_dist(alpha(k), 1.0);
+    draws(k) = gamma_dist(rng);
+    sum_draws += draws(k);
+  }
+  
+  return draws / sum_draws;
+}
+
+// Helper function: K-means++ initialization
+arma::vec kmeans_plusplus(const arma::vec& y, int K, std::mt19937& rng) {
+  int n = y.n_elem;
+  arma::vec centers(K);
+  std::uniform_real_distribution<double> unif(0.0, 1.0);
+  
+  // First center: random point
+  std::uniform_int_distribution<int> runif_int(0, n-1);
+  centers(0) = y(runif_int(rng));
+  
+  for(int k = 1; k < K; ++k) {
+    arma::vec distances(n);
+    
+    for(int i = 0; i < n; ++i) {
+      double min_dist = INFINITY;
+      for(int j = 0; j < k; ++j) {
+        double dist = fabs(y(i) - centers(j));
+        if(dist < min_dist) min_dist = dist;
+      }
+      distances(i) = min_dist * min_dist;
+    }
+    
+    // Normalize to probabilities
+    distances /= arma::sum(distances);
+    
+    // Cumulative sum
+    arma::vec cumsum = arma::cumsum(distances);
+    double u = unif(rng);
+    
+    int selected_idx = 0;
+    for(int i = 0; i < n; ++i) {
+      if(u <= cumsum(i)) {
+        selected_idx = i;
+        break;
+      }
+    }
+    
+    centers(k) = y(selected_idx);
+  }
+  
+  return centers;
+}
+
+// MH-within-Gibbs implementation 
 // Gaussian mixture MCMC that prevents empty groups
 // [[Rcpp::export]]
 Rcpp::List MM_MH_cpp(const arma::vec& y, 
@@ -332,5 +391,303 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
     Rcpp::Named("n_components") = n_components,
     Rcpp::Named("n_iter") = n_iter,
     Rcpp::Named("burnin") = burnin
+  );
+}
+
+// NEW Full Gibbs sampler for Gaussian mixture model with conjugate priors
+// [[Rcpp::export]]
+Rcpp::List MM_FullGibbs_cpp(const arma::vec& y,
+                            const arma::vec& prior_means,
+                            int n_iter = 1000,
+                            int burnin = 500,
+                            int seed = 123) {
+  
+  int n = y.n_elem;
+  int K = prior_means.n_elem;
+  int n_samples = n_iter - burnin;
+  
+  // Random number generator
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<double> unif(0.0, 1.0);
+  std::normal_distribution<double> norm(0.0, 1.0);
+  
+  // ===================== PRIOR HYPERPARAMETERS =====================
+  // Set reasonable defaults based on data
+  double global_mean = arma::mean(y);
+  double data_variance = arma::var(y);
+  
+  // For means: Normal(prior_mean, prior_tau2) - diffuse prior
+  double prior_mean = global_mean;
+  double prior_tau2 = 100.0 * data_variance;  // Diffuse
+  
+  // For variances: InverseGamma(alpha, beta) - weakly informative
+  double alpha = 3.0;                         // Shape parameter
+  double beta = data_variance;                // Rate parameter (scale)
+  
+  // For weights: Dirichlet(delta, ..., delta) - symmetric
+  double delta = 5.0;                         // Concentration parameter
+  
+  // ===================== INITIALIZATION =====================
+  
+  // Initialize storage for posterior probabilities
+  arma::mat z_probs(n, K, arma::fill::zeros);
+  
+  // Initialize parameters with K-means++ for better starting values
+  arma::vec means = kmeans_plusplus(y, K, rng);
+  arma::vec sds = arma::ones(K) * sqrt(data_variance);
+  arma::vec weights = arma::ones(K) / K;
+  
+  // Initialize cluster assignments based on nearest mean
+  arma::ivec z_current(n);
+  
+  for(int i = 0; i < n; ++i) {
+    arma::vec dists(K);
+    for(int k = 0; k < K; ++k) {
+      dists(k) = fabs(y(i) - means(k));
+    }
+    z_current(i) = dists.index_min() + 1;  // 1-indexed
+  }
+  
+  // Ensure no empty clusters initially
+  arma::vec counts(K);
+  for(int k = 0; k < K; ++k) {
+    counts(k) = arma::sum(z_current == (k + 1));
+    if(counts(k) == 0) {
+      // Find largest cluster and split
+      int max_k = counts.index_max();
+      arma::uvec max_indices = arma::find(z_current == (max_k + 1));
+      if(max_indices.n_elem > 1) {
+        z_current(max_indices(0)) = k + 1;
+      }
+    }
+  }
+  
+  // ===================== MCMC LOOP =====================
+  
+  for(int iter = 0; iter < n_iter; ++iter) {
+    
+    // ===== 1. UPDATE CLUSTER ASSIGNMENTS (Gibbs) =====
+    for(int i = 0; i < n; ++i) {
+      arma::vec log_probs(K);
+      
+      // Calculate log probabilities for each cluster
+      for(int k = 0; k < K; ++k) {
+        // Likelihood term (Gaussian)
+        double z_score = (y(i) - means(k)) / sds(k);
+        double log_lik = -0.5 * z_score * z_score - log(sds(k));
+        
+        // Prior term (log of weight)
+        double log_prior = log(weights(k));
+        
+        // Full conditional (up to normalization)
+        log_probs(k) = log_lik + log_prior;
+      }
+      
+      // Numerical stability: subtract max
+      double max_log = log_probs.max();
+      log_probs -= max_log;
+      
+      // Convert to probabilities
+      arma::vec probs = arma::exp(log_probs);
+      probs /= arma::sum(probs);
+      
+      // Sample from categorical distribution
+      double u = unif(rng);
+      double cum_prob = 0.0;
+      int new_z = 1;  // Default to cluster 1
+      
+      for(int k = 0; k < K; ++k) {
+        cum_prob += probs(k);
+        if(u <= cum_prob) {
+          new_z = k + 1;
+          break;
+        }
+      }
+      
+      z_current(i) = new_z;
+      
+      // Store probabilities after burnin
+      if(iter >= burnin) {
+        for(int k = 0; k < K; ++k) {
+          z_probs(i, k) += probs(k);
+        }
+      }
+    }
+    
+    // ===== 2. UPDATE CLUSTER COUNTS =====
+    counts.zeros();
+    for(int i = 0; i < n; ++i) {
+      counts(z_current(i) - 1) += 1.0;
+    }
+    
+    // ===== 3. UPDATE MEANS (Gibbs - Normal conjugate) =====
+    for(int k = 0; k < K; ++k) {
+      arma::uvec cluster_indices = arma::find(z_current == (k + 1));
+      int n_k = cluster_indices.n_elem;
+      
+      if(n_k > 0) {
+        // Data statistics
+        double ybar_k = arma::mean(y.elem(cluster_indices));
+        double sigma2_k = sds(k) * sds(k);
+        
+        // Prior precision and variance
+        double prior_precision = 1.0 / prior_tau2;
+        double data_precision = n_k / sigma2_k;
+        
+        // Posterior parameters
+        double post_precision = prior_precision + data_precision;
+        double post_variance = 1.0 / post_precision;
+        double post_mean = (prior_precision * prior_mean + 
+                            data_precision * ybar_k) / post_precision;
+        
+        // Sample from posterior
+        means(k) = post_mean + sqrt(post_variance) * norm(rng);
+      } else {
+        // Sample from prior if cluster is empty
+        means(k) = prior_mean + sqrt(prior_tau2) * norm(rng);
+      }
+    }
+    
+    // ===== 4. UPDATE VARIANCES (Gibbs - Inverse Gamma conjugate) =====
+    for(int k = 0; k < K; ++k) {
+      arma::uvec cluster_indices = arma::find(z_current == (k + 1));
+      int n_k = cluster_indices.n_elem;
+      
+      if(n_k > 0) {
+        // Calculate sum of squares
+        double sum_sq = 0.0;
+        for(int idx : cluster_indices) {
+          double diff = y(idx) - means(k);
+          sum_sq += diff * diff;
+        }
+        
+        // Posterior parameters for Inverse Gamma
+        double post_alpha = alpha + n_k / 2.0;
+        double post_beta = beta + sum_sq / 2.0;
+        
+        // Sample from Inverse Gamma via Gamma
+        std::gamma_distribution<double> gamma_dist(post_alpha, 1.0/post_beta);
+        double inv_sigma2 = gamma_dist(rng);
+        sds(k) = sqrt(1.0 / inv_sigma2);
+        
+        // Ensure minimum variance for numerical stability
+        sds(k) = std::max(sds(k), 0.1);
+      } else {
+        // Sample from prior
+        std::gamma_distribution<double> gamma_dist(alpha, 1.0/beta);
+        double inv_sigma2 = gamma_dist(rng);
+        sds(k) = sqrt(1.0 / inv_sigma2);
+      }
+    }
+    
+    // ===== 5. UPDATE WEIGHTS (Gibbs - Dirichlet conjugate) =====
+    arma::vec dirichlet_params = counts + delta;
+    weights = rdirichlet_cpp(dirichlet_params, rng);
+    
+    // Optional: Progress reporting
+    if((iter + 1) % 1000 == 0) {
+      Rcpp::Rcout << "Iteration " << (iter + 1) << "/" << n_iter;
+      Rcpp::Rcout << " | Non-empty clusters: " << arma::sum(counts > 0);
+      Rcpp::Rcout << std::endl;
+    }
+  }
+  
+  // ===================== POST-PROCESSING =====================
+  
+  // Normalize probabilities
+  z_probs = z_probs / n_samples;
+  
+  // Calculate assignments and confidence
+  arma::ivec assigned_group(n);
+  arma::vec assignment_confidence(n);
+  
+  for(int i = 0; i < n; ++i) {
+    double max_prob = z_probs(i, 0);
+    int best_k = 0;
+    
+    for(int k = 1; k < K; ++k) {
+      if(z_probs(i, k) > max_prob) {
+        max_prob = z_probs(i, k);
+        best_k = k;
+      }
+    }
+    
+    assigned_group(i) = best_k + 1;  // 1-indexed
+    assignment_confidence(i) = max_prob;
+  }
+  
+  // Calculate group statistics
+  arma::vec min_assigned(n), max_assigned(n), mean_assigned(n), mode_assigned(n);
+  
+  for(int k = 0; k < K; ++k) {
+    arma::uvec group_indices = arma::find(assigned_group == (k + 1));
+    
+    if(group_indices.n_elem > 0) {
+      arma::vec group_vals = y.elem(group_indices);
+      
+      double min_val = arma::min(group_vals);
+      double max_val = arma::max(group_vals);
+      double mean_val = arma::mean(group_vals);
+      
+      // Simple mode estimation
+      int n_bins = std::min(20, static_cast<int>(group_vals.n_elem / 5));
+      n_bins = std::max(n_bins, 3);
+      
+      arma::vec hist_counts(n_bins, arma::fill::zeros);
+      double bin_width = (max_val - min_val) / n_bins;
+      
+      if(bin_width < 1e-10) {
+        bin_width = 0.1;
+      }
+      
+      for(int idx = 0; idx < group_vals.n_elem; ++idx) {
+        int bin_idx = static_cast<int>((group_vals(idx) - min_val) / bin_width);
+        bin_idx = std::min(std::max(bin_idx, 0), n_bins - 1);
+        hist_counts(bin_idx)++;
+      }
+      
+      int mode_bin = hist_counts.index_max();
+      double mode_val = min_val + (mode_bin + 0.5) * bin_width;
+      
+      // Assign to all members of this group
+      for(int idx = 0; idx < group_indices.n_elem; ++idx) {
+        int i = group_indices(idx);
+        min_assigned(i) = min_val;
+        max_assigned(i) = max_val;
+        mean_assigned(i) = mean_val;
+        mode_assigned(i) = mode_val;
+      }
+    }
+  }
+  
+  // Calculate posterior means for parameters
+  arma::vec posterior_means = means;
+  arma::vec posterior_sds = sds;
+  arma::vec posterior_weights = weights;
+  
+  // ===================== RETURN RESULTS =====================
+  
+  return Rcpp::List::create(
+    Rcpp::Named("y") = y,
+    Rcpp::Named("z_probs") = z_probs,
+    Rcpp::Named("assigned_group") = assigned_group,
+    Rcpp::Named("assignment_confidence") = assignment_confidence,
+    Rcpp::Named("min_assigned") = min_assigned,
+    Rcpp::Named("max_assigned") = max_assigned,
+    Rcpp::Named("mean_assigned") = mean_assigned,
+    Rcpp::Named("mode_assigned") = mode_assigned,
+    Rcpp::Named("posterior_means") = posterior_means,
+    Rcpp::Named("posterior_sds") = posterior_sds,
+    Rcpp::Named("posterior_weights") = posterior_weights,
+    Rcpp::Named("n_components") = K,
+    Rcpp::Named("n_iter") = n_iter,
+    Rcpp::Named("burnin") = burnin,
+    Rcpp::Named("prior_hyperparameters") = Rcpp::List::create(
+      Rcpp::Named("prior_mean") = prior_mean,
+      Rcpp::Named("prior_tau2") = prior_tau2,
+      Rcpp::Named("alpha") = alpha,
+      Rcpp::Named("beta") = beta,
+      Rcpp::Named("delta") = delta
+    )
   );
 }

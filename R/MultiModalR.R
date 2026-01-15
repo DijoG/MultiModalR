@@ -1,10 +1,11 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-# Version: 1.0.0
-# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
+# Version: 2.0.0
+# Dual MCMC implementation (Full Gibbs AND Metropolis-Hastings-within-partial-Gibbs)
 # Based on MINLAM (depreciated) by Gergő Diószegi
 
 #' @import Rcpp
 #' @importFrom Rcpp evalCpp
+#' @importFrom stats bw.nrd bw.bcv bw.SJ
 #' @useDynLib MultiModalR, .registration = TRUE
 NULL
 
@@ -28,45 +29,52 @@ check_PACKS <- function() {
   }
 }
 
+#' Obtain the number of groups based on bandwidth selection with SJ tuning
+#'
+#' @param y vector, input data of a distribution
+#' @param sj_adjust adjustment factor for sj-dpi bandwidth (default: 1.0)
+#' @return data frame with methods and number of groups
+#' @export
+get_NGRP <- function(y, sj_adjust = 1.0) {
+  
+  # Calculate bandwidths
+  bwRT = stats::bw.nrd(y)                 # Scott's 1.06
+  bwBCV = stats::bw.bcv(y)                # Biased cross-validation
+  
+  # Sheather & Jones' direct plug-in method with tuning
+  bwSJ_base = stats::bw.SJ(y, method = "dpi")
+  bwSJ_tuned = bwSJ_base * sj_adjust
+  
+  # Ensure reasonable bounds
+  data_range = diff(range(y))
+  min_bw = data_range / 100  # Minimum: 1% of range
+  max_bw = data_range / 3    # Maximum: 33% of range
+  bwSJ_tuned = max(min(bwSJ_tuned, max_bw), min_bw)
+  
+  # Detect modes
+  nrd_nmod = multimode::nmodes(y, bw = bwRT)
+  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
+  sj_nmod = multimode::nmodes(y, bw = bwSJ_tuned)
+  
+  return(data.frame(
+    Method = c("nrd", "bcv", "sj-dpi"),
+    Bandwidth = c(bwRT, bwBCV, bwSJ_tuned),
+    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)
+  ))
+}
+
 #' Extract mode statistics from a mode forest
 #'
 #' @param y vector, input data of a distribution
-#' @param adjust adjustment factor for bandwidth (default: 1.0)  
+#' @param nmod numeric, count/number of subpopulations/subgroups  
 #' @return data frame with estimated modes
 #' @export
-get_MODES <- function(y, adjust = 1.0) {
-  dSJ = density(y, bw = "SJ", adjust = adjust)   # Sheather-Jones direct plug-in
-  dNRD = density(y, bw = "nrd", adjust = adjust) # Scott's normal reference rule
-  dBCV = density(y, bw = "bcv", adjust = adjust) # Biased cross-validation (BCV)
-  #dUCV = density(y, bw = "ucv")                  # Unbiased cross-validation (UCV)
-  
-  # Find peaks for each method
-  peakSJ = dSJ$x[which(diff(sign(diff(dSJ$y))) < 0) + 1]
-  peak_heightSJ = dSJ$y[which(diff(sign(diff(dSJ$y))) < 0) + 1]
-  
-  peakNRD = dNRD$x[which(diff(sign(diff(dNRD$y))) < 0) + 1]
-  peak_heightNRD = dNRD$y[which(diff(sign(diff(dNRD$y))) < 0) + 1]
-  
-  peakBCV = dBCV$x[which(diff(sign(diff(dBCV$y))) < 0) + 1]
-  peak_heightBCV = dBCV$y[which(diff(sign(diff(dBCV$y))) < 0) + 1]
-  
-  #peakUCV = dUCV$x[which(diff(sign(diff(dUCV$y))) < 0) + 1]
-  #peak_heightUCV = dUCV$y[which(diff(sign(diff(dUCV$y))) < 0) + 1]
-  
-  # Filter peaks above mean density
-  sig_peakSJ = peakSJ[peak_heightSJ > mean(dSJ$y)]
-  sig_peakNRD = peakNRD[peak_heightNRD > mean(dNRD$y)]
-  sig_peakBCV = peakBCV[peak_heightBCV > mean(dBCV$y)]
-  #sig_peakUCV = peakUCV[peak_heightUCV > mean(dUCV$y)]
-  
-  # Return as named list
-  return(list(
-    "sj-dpi" = data.frame(Est_Mode = sig_peakSJ, Group = 1:length(sig_peakSJ)),
-    "nrd" = data.frame(Est_Mode = sig_peakNRD, Group = 1:length(sig_peakNRD)),
-    "bcv" = data.frame(Est_Mode = sig_peakBCV, Group = 1:length(sig_peakBCV)),
-    #"ucv" = data.frame(Est_Mode = sig_peakUCV, Group = 1:length(sig_peakUCV)),
-    bandwidths = c("sj-dpi" = dSJ$bw, "nrd" = dNRD$bw, "bcv" = dBCV$bw)
-  ))
+get_MODES <- function(y, nmod) {
+  mm = multimode::locmodes(y, mod0 = nmod)
+  modes = mm$locations[seq(1, length(mm$locations), by = 2)]
+  mode_df = data.frame(Est_Mode = modes,
+                       Group = 1:length(modes))
+  return(mode_df)
 }
 
 #' Group/merge modes if they are within a given range
@@ -85,7 +93,7 @@ group_MODES <- function(df, within = 0.1) {
     dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop")
 }
 
-#' Fast MCMC for mixture models (C++ implementation)
+#' Fast MCMC for mixture models with choice of algorithm
 #' 
 #' @param y Numeric vector of data
 #' @param grp Number of mixture components
@@ -93,13 +101,15 @@ group_MODES <- function(df, within = 0.1) {
 #' @param ids Vector of IDs for validation (required)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
 #' @param seed Random seed
+#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return List with MCMC results
 #' @export
-MM_MH <- function(y, grp, prior_means = NULL, ids,
-                  n_iter = 1000, burnin = 500,
-                  proposal_sd = 0.15, seed = NULL) {
+MM_MCMC <- function(y, grp, prior_means = NULL, ids,
+                    n_iter = 1000, burnin = 500,
+                    proposal_sd = 0.15, seed = NULL,
+                    algorithm = "full_gibbs") {
   
   # Validate IDs - they are required
   if(missing(ids)) {
@@ -136,17 +146,37 @@ MM_MH <- function(y, grp, prior_means = NULL, ids,
     prior_means = seq(min(y), max(y), length.out = grp)
   }
   
-  result = MM_MH_cpp(
-    y = as.numeric(y),
-    prior_means = as.numeric(prior_means),
-    n_iter = as.integer(n_iter),
-    burnin = as.integer(burnin),
-    proposal_sd = as.numeric(proposal_sd),
-    seed = as.integer(seed)
-  )
+  # Validate algorithm choice
+  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
+    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
+    algorithm = "full_gibbs"
+  }
+  
+  # Call appropriate C++ function
+  if(algorithm == "full_gibbs") {
+    message("Using Full Gibbs sampler (no tuning parameters)")
+    result = MM_FullGibbs_cpp(
+      y = as.numeric(y),
+      prior_means = as.numeric(prior_means),
+      n_iter = as.integer(n_iter),
+      burnin = as.integer(burnin),
+      seed = as.integer(seed)
+    )
+  } else {
+    message("Using MH-within-Gibbs sampler (proposal_sd = ", proposal_sd, ")")
+    result = MM_MH_cpp(
+      y = as.numeric(y),
+      prior_means = as.numeric(prior_means),
+      n_iter = as.integer(n_iter),
+      burnin = as.integer(burnin),
+      proposal_sd = as.numeric(proposal_sd),
+      seed = as.integer(seed)
+    )
+  }
   
   # Store the IDs in the result
   result$ids = ids
+  result$algorithm = algorithm
   
   return(result)
 }
@@ -155,7 +185,7 @@ MM_MH <- function(y, grp, prior_means = NULL, ids,
 #' 
 #' Converts MCMC results to exact CSV format
 #' 
-#' @param mcmc_result Output from MM_MH() - MUST contain ids in mcmc_result$ids if needed
+#' @param mcmc_result Output from MM_MCMC() - MUST contain ids in mcmc_result$ids if needed
 #' @param y_original Original y values (if different from mcmc_result$y)
 #' @param group_original Original group assignments (optional)
 #' @param main_class Category/class name
@@ -169,7 +199,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   n = length(mcmc_result$y)
   n_components = mcmc_result$n_components
   
-  # Get IDs from mcmc_result (should have been added by MM_MH if provided)
+  # Get IDs from mcmc_result (should have been added by MM_MCMC if provided)
   ids = mcmc_result$ids
   
   # Check ID length if IDs exist
@@ -230,6 +260,11 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   df$Mean_Assigned = mcmc_result$mean_assigned
   df$Mode_Assigned = mcmc_result$mode_assigned
   
+  # Add algorithm information if available
+  if(!is.null(mcmc_result$algorithm)) {
+    df$Algorithm = mcmc_result$algorithm
+  }
+  
   # Ensure Main_Class is character (not factor or logical)
   df$Main_Class = as.character(main_class)
   
@@ -248,15 +283,16 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param adjust Adjustment factor for bandwidth detector (default: 1.0)
+#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth detector (default: 1.0)
+#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return Data frame or writes CSV files to out_dir
 #' @export
-get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
-                             out_dir = NULL, n_iter = 1000,
-                             burnin = 500, proposal_sd = 0.15,
-                             adjust = 1.0) {
+get_PROBCLASS <- function(data, varCLASS, varY, varID, 
+                          method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
+                          out_dir = NULL, n_iter = 1000,
+                          burnin = 500, proposal_sd = 0.15,
+                          sj_adjust = 1.0, algorithm = "full_gibbs") {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -275,6 +311,19 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     stop("varID '", varID, "' not found in data")
   }
   
+  # Validate algorithm choice
+  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
+    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
+    algorithm = "full_gibbs"
+  }
+  
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
+  
   categories = unique(data[[varCLASS]])
   results = list()
   
@@ -285,19 +334,43 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     # Extract IDs
     ids = cat_data[[varID]]
     
-    message(" Obtaining modes for prior using: ", method, " method with ", adjust, " bandwith modifier")
+    message("Processing category: ", cat)
+    
+    # Determine effective sj_adjust value
+    # Only use sj_adjust for method = "sj-dpi", otherwise use 1.0
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    
+    if(method == "sj-dpi") {
+      message("  Using SJ-dpi with adjustment: ", sj_adjust)
+    } else {
+      message("  Using method: ", method, " (sj_adjust ignored)")
+    }
+    
+    # Mode detection WITH SJ TUNING
+    n_grp_df = get_NGRP(y, sj_adjust = effective_sj_adjust)
+    n_grp = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(n_grp)
+    n_grp = min(max(n_grp, 2), maxNGROUP)
+    
+    # Get bandwidth used for debugging
+    bandwidth_used = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(Bandwidth)
+    
+    message("  Detected ", n_grp, " components (BW = ", round(bandwidth_used, 4), ")")
     
     # Get mode locations
-    modes_df = get_MODES(y, adjust = adjust)
-    modes_grouped = group_MODES(modes_df[[method]], within = within)
+    modes_df = get_MODES(y, nmod = n_grp)
+    modes_grouped = group_MODES(modes_df, within = within)
     
     n_components = nrow(modes_grouped)
     prior_means = modes_grouped$Est_Mode
     
-    message(" After grouping: ", n_components, " components")
+    message("  After grouping: ", n_components, " components")
     
-    # Run MCMC WITH IDs
-    mh_result = MM_MH(
+    # Run MCMC WITH IDs using chosen algorithm
+    mcmc_result = MM_MCMC(
       y = y,
       grp = n_components,
       prior_means = prior_means,
@@ -305,14 +378,26 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      seed = 123
+      seed = 123,
+      algorithm = algorithm
     )
     
-    message("  Mean acceptance: ", paste(round(mh_result$mean_acceptance, 3), collapse = ", "))
+    # Report appropriate diagnostics
+    if(algorithm == "full_gibbs") {
+      if(!is.null(mcmc_result$assignment_confidence)) {
+        message("  Mean assignment confidence: ", 
+                round(mean(mcmc_result$assignment_confidence), 3))
+      }
+    } else {
+      if(!is.null(mcmc_result$mean_acceptance)) {
+        message("  Mean acceptance: ", 
+                paste(round(mcmc_result$mean_acceptance, 3), collapse = ", "))
+      }
+    }
     
-    # Create output - IDs are already in mcmc_result from MM_MH
+    # Create output - IDs are already in mcmc_result from MM_MCMC
     output_df = create_MM_output(
-      mcmc_result = mh_result,
+      mcmc_result = mcmc_result,
       y_original = y,
       group_original = NULL,
       main_class = as.character(cat),
@@ -343,7 +428,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
   }
 }
 
-#' Parallel wrapper around get_PROBCLASS_MH
+#' Parallel wrapper around get_PROBCLASS
 #' 
 #' @param data Input data frame
 #' @param varCLASS Character, category variable name (required)
@@ -356,15 +441,17 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_workers Number of parallel workers
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param adjust Adjustment factor for bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
+#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
+#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
                           method = "sj-dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15, adjust = 1.0) {
+                          proposal_sd = 0.15, sj_adjust = 1.0,
+                          algorithm = "full_gibbs") {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -383,12 +470,26 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     stop("varID '", varID, "' not found in data")
   }
   
+  # Validate algorithm choice
+  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
+    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
+    algorithm = "full_gibbs"
+  }
+  
   # Split data by category
   categories = unique(data[[varCLASS]])
   data_list = split(data, data[[varCLASS]])
   
   message("Processing ", length(categories), " categories in parallel with ", 
           n_workers, " workers")
+  message("Using MCMC algorithm: ", algorithm)
+  
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -400,8 +501,11 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
     
-    # Use get_PROBCLASS_MH with adjust parameter
-    result = get_PROBCLASS_MH(
+    # Determine effective sj_adjust value
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    
+    # Use get_PROBCLASS with algorithm parameter
+    result = get_PROBCLASS(
       data = cat_data,
       varCLASS = varCLASS,
       varY = varY,
@@ -413,7 +517,8 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      adjust = adjust
+      sj_adjust = effective_sj_adjust,
+      algorithm = algorithm
     )
     
     return(result)
@@ -428,7 +533,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   
   # If out_dir is NULL, combine and return results
   if(is.null(out_dir)) {
-    # Remove NULL results (happens when out_dir is provided in get_PROBCLASS_MH)
+    # Remove NULL results (happens when out_dir is provided in get_PROBCLASS)
     result_list = result_list[!sapply(result_list, is.null)]
     
     if(length(result_list) > 0) {
