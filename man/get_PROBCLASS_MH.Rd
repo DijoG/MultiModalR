@@ -2,20 +2,22 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_PROBCLASS_MH}
 \alias{get_PROBCLASS_MH}
-\title{Core function for mixture model MCMC with ID support}
+\title{Core function for mixture model MCMC with ID support and improved initialization}
 \usage{
 get_PROBCLASS_MH(
   data,
   varCLASS,
   varY,
   varID,
-  method = "dpi",
+  method = "adaptive",
+  mode_method = "adaptive",
   within = 0.03,
   maxNGROUP = 5,
   out_dir = NULL,
   n_iter = 1000,
   burnin = 500,
-  proposal_sd = 0.15
+  proposal_sd = 0.15,
+  seed = 123
 )
 }
 \arguments{
@@ -27,7 +29,9 @@ get_PROBCLASS_MH(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method}
+\item{method}{Density estimator method ("adaptive", "silverman", "SJ", "dpi", "nrd", "bcv", or "gmm")}
+
+\item{mode_method}{Mode detection method ("adaptive", "gmm", or "kde")}
 
 \item{within}{Range parameter for mode grouping}
 
@@ -40,10 +44,12 @@ get_PROBCLASS_MH(
 \item{burnin}{Burn-in period (default: 500)}
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
+
+\item{seed}{Random seed}
 }
 \value{
 Data frame or writes CSV files to out_dir
 }
 \description{
-Core function for mixture model MCMC with ID support
+Core function for mixture model MCMC with ID support and improved initialization
 }

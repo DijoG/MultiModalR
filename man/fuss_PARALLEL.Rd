@@ -2,21 +2,23 @@
 % Please edit documentation in R/MultiModalR.R
 \name{fuss_PARALLEL}
 \alias{fuss_PARALLEL}
-\title{Parallel wrapper around get_PROBCLASS_MH}
+\title{Parallel wrapper around get_PROBCLASS_MH with improved initialization}
 \usage{
 fuss_PARALLEL(
   data,
   varCLASS,
   varY,
   varID,
-  method = "dpi",
-  within = 1,
+  method = "adaptive",
+  mode_method = "adaptive",
+  within = 0.03,
   maxNGROUP = 5,
   out_dir = NULL,
   n_workers = 4,
   n_iter = 1000,
   burnin = 500,
-  proposal_sd = 0.15
+  proposal_sd = 0.15,
+  seed = 123
 )
 }
 \arguments{
@@ -29,6 +31,8 @@ fuss_PARALLEL(
 \item{varID}{Character, ID variable name (required)}
 
 \item{method}{Density estimator method}
+
+\item{mode_method}{Mode detection method}
 
 \item{within}{Range parameter}
 
@@ -43,10 +47,12 @@ fuss_PARALLEL(
 \item{burnin}{Burn-in period (default: 500)}
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
+
+\item{seed}{Random seed}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
 }
 \description{
-Parallel wrapper around get_PROBCLASS_MH
+Parallel wrapper around get_PROBCLASS_MH with improved initialization
 }
