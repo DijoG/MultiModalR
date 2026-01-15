@@ -143,7 +143,8 @@ MultiModalR::fuss_PARALLEL(
   within = 1,
   maxNGROUP = 5,
   out_dir = "D:/MultiModalR/test",  
-  n_workers = cores
+  n_workers = cores,
+  sj_adjust = 0.5
 )
 tictoc::toc()
 # Processing time: 9.09 sec (3 cores)
