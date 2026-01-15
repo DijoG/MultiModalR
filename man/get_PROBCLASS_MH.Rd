@@ -16,7 +16,7 @@ get_PROBCLASS_MH(
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  sj_adjust = 1
+  adjust = 1
 )
 }
 \arguments{
@@ -42,7 +42,7 @@ get_PROBCLASS_MH(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth detector (default: 1.0)}
+\item{adjust}{Adjustment factor for bandwidth detector (default: 1.0)}
 }
 \value{
 Data frame or writes CSV files to out_dir

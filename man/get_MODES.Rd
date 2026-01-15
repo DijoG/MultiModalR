@@ -4,12 +4,12 @@
 \alias{get_MODES}
 \title{Extract mode statistics from a mode forest}
 \usage{
-get_MODES(y, nmod)
+get_MODES(y, adjust = 1)
 }
 \arguments{
 \item{y}{vector, input data of a distribution}
 
-\item{nmod}{numeric, count/number of subpopulations/subgroups}
+\item{adjust}{adjustment factor for bandwidth (default: 1.0)}
 }
 \value{
 data frame with estimated modes

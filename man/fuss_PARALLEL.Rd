@@ -17,7 +17,7 @@ fuss_PARALLEL(
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  sj_adjust = 1
+  adjust = 1
 )
 }
 \arguments{
@@ -45,7 +45,7 @@ fuss_PARALLEL(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
+\item{adjust}{Adjustment factor for bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
