@@ -13,11 +13,11 @@ fuss_PARALLEL(
   within = 1,
   maxNGROUP = 5,
   out_dir = NULL,
-  n_workers = 4,
+  n_workers = 3,
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  sj_adjust = 1
+  sj_adjust = 0.5
 )
 }
 \arguments{
@@ -31,13 +31,13 @@ fuss_PARALLEL(
 
 \item{method}{Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")}
 
-\item{within}{Range parameter}
+\item{within}{Range parameter for grouping modes (default: 1)}
 
-\item{maxNGROUP}{Maximum number of groups}
+\item{maxNGROUP}{Maximum number of groups (default: 5)}
 
 \item{out_dir}{Output directory for CSV files (if NULL, returns combined data frame)}
 
-\item{n_workers}{Number of parallel workers}
+\item{n_workers}{Number of parallel workers (default: 3)}
 
 \item{n_iter}{Number of MCMC iterations (default: 1000)}
 
@@ -45,7 +45,7 @@ fuss_PARALLEL(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
+\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 0.5, smaller -> more modes, higher -> fewer modes)}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files

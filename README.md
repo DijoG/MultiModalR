@@ -37,16 +37,19 @@ library(MultiModalR)
 
 # Prepare data and run analysis
 MultiModalR::fuss_PARALLEL(
-  data = df,
-  varCLASS = "Category", 
-  varY = "Value", 
-  varID = "ID",
-  method = "sj-dpi", 
-  within = 1, 
-  maxNGROUP = 5, 
-  out_dir = ".../output", 
-  n_workers = 3,
-  sj_adjust = .5
+  data = df,                 # -> requied
+  varCLASS = "Category",     # -> requied
+  varY = "Value",            # -> requied
+  varID = "ID",              # -> requied
+  method = "sj-dpi",         # /default
+  within = 1,                # /default
+  maxNGROUP = 5,             # /default
+  out_dir = ".../output",    # -> optinonal 
+  n_workers = 3,             # /default
+  n_iter = 1000,             # /default
+  burnin = 500,              # /default
+  proposal_sd = .15          # /default
+  sj_adjust = .5             # /default
 )
 ```
 ## Detailed Example
@@ -99,7 +102,7 @@ ggplot(df, aes(x = Value)) +
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         plot.title = element_text(hjust = .5))
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_01.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_001.png">
 
 ```r
 # Plot 02 ~ subgroups shown
@@ -121,7 +124,7 @@ ggplot(df, aes(x = Value, fill = Subpopulation)) +
         plot.title = element_text(hjust = .5)) +
   guides(fill = guide_legend(override.aes = list(alpha = .6)))
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_02.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_002.png">
 
 
 ### Parallel Processing Setup 
@@ -131,23 +134,17 @@ cores <- 3
 ```
 ### Running Analysis
 ```r
-library(furrr)
-
 # Analysis with probability output
 MultiModalR::fuss_PARALLEL(
   data = df,
   varCLASS = "Category",
   varY = "Value",
   varID = "ID",
-  method = "dpi",
-  within = 1,
-  maxNGROUP = 5,
   out_dir = "D:/MultiModalR/test",  
-  n_workers = cores,
-  sj_adjust = 0.5
+  n_workers = cores
 )
 tictoc::toc()
-# Processing time: 9.09 sec (3 cores)
+# Processing time: 8.33 sec (3 cores)
 ```
 ### Output 
 
@@ -182,7 +179,7 @@ MultiModalR::plot_VALIDATION(
   value_col = "Value",
   id_col = "ID")
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_03.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_003.png">
 
 **Validation results show accurate subgroup assignment across categories.**
 

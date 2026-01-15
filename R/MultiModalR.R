@@ -389,21 +389,21 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
 #' @param method Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")
-#' @param within Range parameter
-#' @param maxNGROUP Maximum number of groups
+#' @param within Range parameter for grouping modes (default: 1)
+#' @param maxNGROUP Maximum number of groups (default: 5)
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
-#' @param n_workers Number of parallel workers
+#' @param n_workers Number of parallel workers (default: 3)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 0.5, smaller -> more modes, higher -> fewer modes)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
                           method = "sj-dpi", within = 1, maxNGROUP = 5, 
-                          out_dir = NULL, n_workers = 4,  
+                          out_dir = NULL, n_workers = 3,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15, sj_adjust = 1.0) {
+                          proposal_sd = 0.15, sj_adjust = 0.5) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
