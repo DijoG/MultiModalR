@@ -5,7 +5,3 @@ MM_MH_cpp <- function(y, prior_means, n_iter = 1000L, burnin = 500L, proposal_sd
     .Call(`_MultiModalR_MM_MH_cpp`, y, prior_means, n_iter, burnin, proposal_sd, seed)
 }
 
-MM_FullGibbs_cpp <- function(y, prior_means, n_iter = 1000L, burnin = 500L, seed = 123L) {
-    .Call(`_MultiModalR_MM_FullGibbs_cpp`, y, prior_means, n_iter, burnin, seed)
-}
-

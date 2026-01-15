@@ -1,11 +1,10 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-# Version: 2.0.0
-# Dual MCMC implementation (Full Gibbs AND Metropolis-Hastings-within-partial-Gibbs)
+# Version: 1.0.0
+# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
 # Based on MINLAM (depreciated) by Gergő Diószegi
 
 #' @import Rcpp
 #' @importFrom Rcpp evalCpp
-#' @importFrom stats bw.nrd bw.bcv bw.SJ
 #' @useDynLib MultiModalR, .registration = TRUE
 NULL
 
@@ -93,7 +92,7 @@ group_MODES <- function(df, within = 0.1) {
     dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop")
 }
 
-#' Fast MCMC for mixture models with choice of algorithm
+#' Fast MCMC for mixture models (C++ implementation)
 #' 
 #' @param y Numeric vector of data
 #' @param grp Number of mixture components
@@ -101,15 +100,13 @@ group_MODES <- function(df, within = 0.1) {
 #' @param ids Vector of IDs for validation (required)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
+#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param seed Random seed
-#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return List with MCMC results
 #' @export
-MM_MCMC <- function(y, grp, prior_means = NULL, ids,
-                    n_iter = 1000, burnin = 500,
-                    proposal_sd = 0.15, seed = NULL,
-                    algorithm = "full_gibbs") {
+MM_MH <- function(y, grp, prior_means = NULL, ids,
+                  n_iter = 1000, burnin = 500,
+                  proposal_sd = 0.15, seed = NULL) {
   
   # Validate IDs - they are required
   if(missing(ids)) {
@@ -146,37 +143,17 @@ MM_MCMC <- function(y, grp, prior_means = NULL, ids,
     prior_means = seq(min(y), max(y), length.out = grp)
   }
   
-  # Validate algorithm choice
-  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
-    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
-    algorithm = "full_gibbs"
-  }
-  
-  # Call appropriate C++ function
-  if(algorithm == "full_gibbs") {
-    message("Using Full Gibbs sampler (no tuning parameters)")
-    result = MM_FullGibbs_cpp(
-      y = as.numeric(y),
-      prior_means = as.numeric(prior_means),
-      n_iter = as.integer(n_iter),
-      burnin = as.integer(burnin),
-      seed = as.integer(seed)
-    )
-  } else {
-    message("Using MH-within-Gibbs sampler (proposal_sd = ", proposal_sd, ")")
-    result = MM_MH_cpp(
-      y = as.numeric(y),
-      prior_means = as.numeric(prior_means),
-      n_iter = as.integer(n_iter),
-      burnin = as.integer(burnin),
-      proposal_sd = as.numeric(proposal_sd),
-      seed = as.integer(seed)
-    )
-  }
+  result = MM_MH_cpp(
+    y = as.numeric(y),
+    prior_means = as.numeric(prior_means),
+    n_iter = as.integer(n_iter),
+    burnin = as.integer(burnin),
+    proposal_sd = as.numeric(proposal_sd),
+    seed = as.integer(seed)
+  )
   
   # Store the IDs in the result
   result$ids = ids
-  result$algorithm = algorithm
   
   return(result)
 }
@@ -185,7 +162,7 @@ MM_MCMC <- function(y, grp, prior_means = NULL, ids,
 #' 
 #' Converts MCMC results to exact CSV format
 #' 
-#' @param mcmc_result Output from MM_MCMC() - MUST contain ids in mcmc_result$ids if needed
+#' @param mcmc_result Output from MM_MH() - MUST contain ids in mcmc_result$ids if needed
 #' @param y_original Original y values (if different from mcmc_result$y)
 #' @param group_original Original group assignments (optional)
 #' @param main_class Category/class name
@@ -199,7 +176,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   n = length(mcmc_result$y)
   n_components = mcmc_result$n_components
   
-  # Get IDs from mcmc_result (should have been added by MM_MCMC if provided)
+  # Get IDs from mcmc_result (should have been added by MM_MH if provided)
   ids = mcmc_result$ids
   
   # Check ID length if IDs exist
@@ -260,11 +237,6 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   df$Mean_Assigned = mcmc_result$mean_assigned
   df$Mode_Assigned = mcmc_result$mode_assigned
   
-  # Add algorithm information if available
-  if(!is.null(mcmc_result$algorithm)) {
-    df$Algorithm = mcmc_result$algorithm
-  }
-  
   # Ensure Main_Class is character (not factor or logical)
   df$Main_Class = as.character(main_class)
   
@@ -283,16 +255,15 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
+#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param sj_adjust Adjustment factor for sj-dpi bandwidth detector (default: 1.0)
-#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return Data frame or writes CSV files to out_dir
 #' @export
-get_PROBCLASS <- function(data, varCLASS, varY, varID, 
-                          method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
-                          out_dir = NULL, n_iter = 1000,
-                          burnin = 500, proposal_sd = 0.15,
-                          sj_adjust = 1.0, algorithm = "full_gibbs") {
+get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
+                             method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
+                             out_dir = NULL, n_iter = 1000,
+                             burnin = 500, proposal_sd = 0.15,
+                             sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -309,12 +280,6 @@ get_PROBCLASS <- function(data, varCLASS, varY, varID,
   
   if(!varID %in% names(data)) {
     stop("varID '", varID, "' not found in data")
-  }
-  
-  # Validate algorithm choice
-  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
-    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
-    algorithm = "full_gibbs"
   }
   
   # Warn if sj_adjust is used with non-sj-dpi method
@@ -369,8 +334,8 @@ get_PROBCLASS <- function(data, varCLASS, varY, varID,
     
     message("  After grouping: ", n_components, " components")
     
-    # Run MCMC WITH IDs using chosen algorithm
-    mcmc_result = MM_MCMC(
+    # Run MCMC WITH IDs
+    mh_result = MM_MH(
       y = y,
       grp = n_components,
       prior_means = prior_means,
@@ -378,26 +343,14 @@ get_PROBCLASS <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      seed = 123,
-      algorithm = algorithm
+      seed = 123
     )
     
-    # Report appropriate diagnostics
-    if(algorithm == "full_gibbs") {
-      if(!is.null(mcmc_result$assignment_confidence)) {
-        message("  Mean assignment confidence: ", 
-                round(mean(mcmc_result$assignment_confidence), 3))
-      }
-    } else {
-      if(!is.null(mcmc_result$mean_acceptance)) {
-        message("  Mean acceptance: ", 
-                paste(round(mcmc_result$mean_acceptance, 3), collapse = ", "))
-      }
-    }
+    message("  Mean acceptance: ", paste(round(mh_result$mean_acceptance, 3), collapse = ", "))
     
-    # Create output - IDs are already in mcmc_result from MM_MCMC
+    # Create output - IDs are already in mcmc_result from MM_MH
     output_df = create_MM_output(
-      mcmc_result = mcmc_result,
+      mcmc_result = mh_result,
       y_original = y,
       group_original = NULL,
       main_class = as.character(cat),
@@ -428,7 +381,7 @@ get_PROBCLASS <- function(data, varCLASS, varY, varID,
   }
 }
 
-#' Parallel wrapper around get_PROBCLASS
+#' Parallel wrapper around get_PROBCLASS_MH
 #' 
 #' @param data Input data frame
 #' @param varCLASS Character, category variable name (required)
@@ -441,17 +394,15 @@ get_PROBCLASS <- function(data, varCLASS, varY, varID,
 #' @param n_workers Number of parallel workers
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for MH algorithm (default: 0.15)
+#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
-#' @param algorithm MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
                           method = "sj-dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15, sj_adjust = 1.0,
-                          algorithm = "full_gibbs") {
+                          proposal_sd = 0.15, sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -470,19 +421,12 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     stop("varID '", varID, "' not found in data")
   }
   
-  # Validate algorithm choice
-  if(!algorithm %in% c("full_gibbs", "mh_within_gibbs")) {
-    warning("algorithm must be 'full_gibbs' or 'mh_within_gibbs'. Using 'full_gibbs'.")
-    algorithm = "full_gibbs"
-  }
-  
   # Split data by category
   categories = unique(data[[varCLASS]])
   data_list = split(data, data[[varCLASS]])
   
   message("Processing ", length(categories), " categories in parallel with ", 
           n_workers, " workers")
-  message("Using MCMC algorithm: ", algorithm)
   
   # Warn if sj_adjust is used with non-sj-dpi method
   if(method != "sj-dpi" && sj_adjust != 1.0) {
@@ -504,8 +448,8 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     # Determine effective sj_adjust value
     effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
     
-    # Use get_PROBCLASS with algorithm parameter
-    result = get_PROBCLASS(
+    # Use get_PROBCLASS_MH with sj_adjust parameter
+    result = get_PROBCLASS_MH(
       data = cat_data,
       varCLASS = varCLASS,
       varY = varY,
@@ -517,8 +461,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      sj_adjust = effective_sj_adjust,
-      algorithm = algorithm
+      sj_adjust = effective_sj_adjust
     )
     
     return(result)
@@ -533,7 +476,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   
   # If out_dir is NULL, combine and return results
   if(is.null(out_dir)) {
-    # Remove NULL results (happens when out_dir is provided in get_PROBCLASS)
+    # Remove NULL results (happens when out_dir is provided in get_PROBCLASS_MH)
     result_list = result_list[!sapply(result_list, is.null)]
     
     if(length(result_list) > 0) {

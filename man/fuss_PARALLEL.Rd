@@ -2,7 +2,7 @@
 % Please edit documentation in R/MultiModalR.R
 \name{fuss_PARALLEL}
 \alias{fuss_PARALLEL}
-\title{Parallel wrapper around get_PROBCLASS}
+\title{Parallel wrapper around get_PROBCLASS_MH}
 \usage{
 fuss_PARALLEL(
   data,
@@ -17,8 +17,7 @@ fuss_PARALLEL(
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  sj_adjust = 1,
-  algorithm = "full_gibbs"
+  sj_adjust = 1
 )
 }
 \arguments{
@@ -44,15 +43,13 @@ fuss_PARALLEL(
 
 \item{burnin}{Burn-in period (default: 500)}
 
-\item{proposal_sd}{Proposal standard deviation for MH algorithm (default: 0.15)}
+\item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
 \item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
-
-\item{algorithm}{MCMC algorithm: "full_gibbs" (default) or "mh_within_gibbs"}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
 }
 \description{
-Parallel wrapper around get_PROBCLASS
+Parallel wrapper around get_PROBCLASS_MH
 }

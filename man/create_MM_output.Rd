@@ -13,7 +13,7 @@ create_MM_output(
 )
 }
 \arguments{
-\item{mcmc_result}{Output from MM_MCMC() - MUST contain ids in mcmc_result$ids if needed}
+\item{mcmc_result}{Output from MM_MH() - MUST contain ids in mcmc_result$ids if needed}
 
 \item{y_original}{Original y values (if different from mcmc_result$y)}
 
