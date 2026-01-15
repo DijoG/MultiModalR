@@ -28,44 +28,52 @@ check_PACKS <- function() {
   }
 }
 
-#' Obtain modes using various bandwidth selection methods
+#' Obtain the number of groups based on bandwidth selection with SJ tuning
 #'
 #' @param y vector, input data of a distribution
-#' @return data frame with estimated modes, methods 
+#' @param sj_adjust adjustment factor for sj-dpi bandwidth (default: 1.0)
+#' @return data frame with methods and number of groups
 #' @export
-get_MODES <- function(y) {
-  dSJ = density(y, bw = "SJ")   # Sheather-Jones direct plug-in
-  dNRD = density(y, bw = "nrd") # Scott's normal reference rule
-  dBCV = density(y, bw = "bcv") # Biased cross-validation (BCV)
-  dUCV = density(y, bw = "ucv") # Unbiased cross-validation (UCV)
+get_NGRP <- function(y, sj_adjust = 1.0) {
   
-  # Find peaks for each method
-  peakSJ = dSJ$x[which(diff(sign(diff(dSJ$y))) < 0) + 1]
-  peak_heightSJ = dSJ$y[which(diff(sign(diff(dSJ$y))) < 0) + 1]
+  # Calculate bandwidths
+  bwRT = stats::bw.nrd(y)                 # Scott's 1.06
+  bwBCV = stats::bw.bcv(y)                # Biased cross-validation
   
-  peakNRD = dNRD$x[which(diff(sign(diff(dNRD$y))) < 0) + 1]
-  peak_heightNRD = dNRD$y[which(diff(sign(diff(dNRD$y))) < 0) + 1]
+  # Sheather & Jones' direct plug-in method with tuning
+  bwSJ_base = stats::bw.SJ(y, method = "dpi")
+  bwSJ_tuned = bwSJ_base * sj_adjust
   
-  peakBCV = dBCV$x[which(diff(sign(diff(dBCV$y))) < 0) + 1]
-  peak_heightBCV = dBCV$y[which(diff(sign(diff(dBCV$y))) < 0) + 1]
+  # Ensure reasonable bounds
+  data_range = diff(range(y))
+  min_bw = data_range / 100  # Minimum: 1% of range
+  max_bw = data_range / 3    # Maximum: 33% of range
+  bwSJ_tuned = max(min(bwSJ_tuned, max_bw), min_bw)
   
-  peakUCV = dUCV$x[which(diff(sign(diff(dUCV$y))) < 0) + 1]
-  peak_heightUCV = dUCV$y[which(diff(sign(diff(dUCV$y))) < 0) + 1]
+  # Detect modes
+  nrd_nmod = multimode::nmodes(y, bw = bwRT)
+  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
+  sj_nmod = multimode::nmodes(y, bw = bwSJ_tuned)
   
-  # Filter peaks above mean density
-  sig_peakSJ = peakSJ[peak_heightSJ > mean(dSJ$y)]
-  sig_peakNRD = peakNRD[peak_heightNRD > mean(dNRD$y)]
-  sig_peakBCV = peakBCV[peak_heightBCV > mean(dBCV$y)]
-  sig_peakUCV = peakUCV[peak_heightUCV > mean(dUCV$y)]
-  
-  # Return as named list
-  return(list(
-    "sj-dpi" = data.frame(Est_Mode = sig_peakSJ, Group = 1:length(sig_peakSJ)),
-    "nrd" = data.frame(Est_Mode = sig_peakNRD, Group = 1:length(sig_peakNRD)),
-    "bcv" = data.frame(Est_Mode = sig_peakBCV, Group = 1:length(sig_peakBCV)),
-    "ucv" = data.frame(Est_Mode = sig_peakUCV, Group = 1:length(sig_peakUCV)),
-    bandwidths = c("sj-dpi" = dSJ$bw, "nrd" = dNRD$bw, "bcv" = dBCV$bw, "ucv" = dUCV$bw)
+  return(data.frame(
+    Method = c("nrd", "bcv", "sj-dpi"),
+    Bandwidth = c(bwRT, bwBCV, bwSJ_tuned),
+    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)
   ))
+}
+
+#' Extract mode statistics from a mode forest
+#'
+#' @param y vector, input data of a distribution
+#' @param nmod numeric, count/number of subpopulations/subgroups  
+#' @return data frame with estimated modes
+#' @export
+get_MODES <- function(y, nmod) {
+  mm = multimode::locmodes(y, mod0 = nmod)
+  modes = mm$locations[seq(1, length(mm$locations), by = 2)]
+  mode_df = data.frame(Est_Mode = modes,
+                       Group = 1:length(modes))
+  return(mode_df)
 }
 
 #' Group/merge modes if they are within a given range
@@ -241,19 +249,21 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("sj-dpi", "nrd", "bcv", "ucv")
+#' @param method Density estimator method ("sj-dpi", "bcv", "nrd")
 #' @param within Range parameter for mode grouping (default: 0.1)
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth detector (default: 1.0)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "ucv", within = 0.1, maxNGROUP = 5, 
+                             method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
-                             burnin = 500, proposal_sd = 0.15) {
+                             burnin = 500, proposal_sd = 0.15,
+                             sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -272,6 +282,13 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     stop("varID '", varID, "' not found in data")
   }
   
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
+  
   categories = unique(data[[varCLASS]])
   results = list()
   
@@ -284,35 +301,38 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     
     message("Processing category: ", cat)
     
-    # Get modes using new get_MODES function
-    modes_list = get_MODES(y)
+    # Determine effective sj_adjust value
+    # Only use sj_adjust for method = "sj-dpi", otherwise use 1.0
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
     
-    # Get the modes for the selected method
-    modes_df = modes_list[[method]]
-    
-    if(is.null(modes_df) || nrow(modes_df) == 0) {
-      warning("No modes found for method '", method, "' in category ", cat, 
-              ". Using median as single mode.")
-      modes_df = data.frame(Est_Mode = median(y), Group = 1)
+    if(method == "sj-dpi") {
+      message("  Using SJ-dpi with adjustment: ", sj_adjust)
+    } else {
+      message("  Using method: ", method, " (sj_adjust ignored)")
     }
     
-    # Group modes that are close together
+    # Mode detection WITH SJ TUNING
+    n_grp_df = get_NGRP(y, sj_adjust = effective_sj_adjust)
+    n_grp = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(n_grp)
+    n_grp = min(max(n_grp, 2), maxNGROUP)
+    
+    # Get bandwidth used for debugging
+    bandwidth_used = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(Bandwidth)
+    
+    message("  Detected ", n_grp, " components (BW = ", round(bandwidth_used, 4), ")")
+    
+    # Get mode locations
+    modes_df = get_MODES(y, nmod = n_grp)
     modes_grouped = group_MODES(modes_df, within = within)
     
     n_components = nrow(modes_grouped)
     prior_means = modes_grouped$Est_Mode
     
-    # Limit to maxNGROUP
-    if(n_components > maxNGROUP) {
-      message("  Limiting from ", n_components, " to ", maxNGROUP, " components")
-      modes_grouped = modes_grouped[1:maxNGROUP, ]
-      n_components = maxNGROUP
-      prior_means = modes_grouped$Est_Mode
-    }
-    
-    message("  Using method: ", method)
-    message("  Detected ", n_components, " components")
-    message("  Prior means: ", paste(round(prior_means, 3), collapse = ", "))
+    message("  After grouping: ", n_components, " components")
     
     # Run MCMC WITH IDs
     mh_result = MM_MH(
@@ -328,7 +348,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     
     message("  Mean acceptance: ", paste(round(mh_result$mean_acceptance, 3), collapse = ", "))
     
-    # Create output
+    # Create output - IDs are already in mcmc_result from MM_MH
     output_df = create_MM_output(
       mcmc_result = mh_result,
       y_original = y,
@@ -367,7 +387,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("sj-dpi", "nrd", "bcv", "ucv") (default: "ucv")
+#' @param method Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
@@ -375,13 +395,14 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
-                          method = "ucv", within = 1, maxNGROUP = 5, 
+                          method = "sj-dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15) {
+                          proposal_sd = 0.15, sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -406,7 +427,13 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   
   message("Processing ", length(categories), " categories in parallel with ", 
           n_workers, " workers")
-  message("Using method: ", method)
+  
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -418,7 +445,10 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
     
-    # Use get_PROBCLASS_MH WITHOUT sj_adjust parameter
+    # Determine effective sj_adjust value
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    
+    # Use get_PROBCLASS_MH with sj_adjust parameter
     result = get_PROBCLASS_MH(
       data = cat_data,
       varCLASS = varCLASS,
@@ -430,7 +460,8 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       out_dir = out_dir,
       n_iter = n_iter,
       burnin = burnin,
-      proposal_sd = proposal_sd
+      proposal_sd = proposal_sd,
+      sj_adjust = effective_sj_adjust
     )
     
     return(result)

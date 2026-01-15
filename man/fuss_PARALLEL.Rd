@@ -9,14 +9,15 @@ fuss_PARALLEL(
   varCLASS,
   varY,
   varID,
-  method = "ucv",
+  method = "sj-dpi",
   within = 1,
   maxNGROUP = 5,
   out_dir = NULL,
   n_workers = 4,
   n_iter = 1000,
   burnin = 500,
-  proposal_sd = 0.15
+  proposal_sd = 0.15,
+  sj_adjust = 1
 )
 }
 \arguments{
@@ -28,7 +29,7 @@ fuss_PARALLEL(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method ("sj-dpi", "nrd", "bcv", "ucv") (default: "ucv")}
+\item{method}{Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")}
 
 \item{within}{Range parameter}
 
@@ -43,6 +44,8 @@ fuss_PARALLEL(
 \item{burnin}{Burn-in period (default: 500)}
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
+
+\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
