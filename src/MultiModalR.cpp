@@ -394,7 +394,7 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
   );
 }
 
-// NEW Full Gibbs sampler for Gaussian mixture model with conjugate priors
+// Full Gibbs sampler for Gaussian mixture model with conjugate priors
 // [[Rcpp::export]]
 Rcpp::List MM_FullGibbs_cpp(const arma::vec& y,
                             const arma::vec& prior_means,
