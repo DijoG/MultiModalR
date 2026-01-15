@@ -1,12 +1,12 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-# Version: 1.0.0
-# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
-# Based on MINLAM (depreciated) by Gergő Diószegi
-
-#' @import Rcpp
-#' @importFrom Rcpp evalCpp
-#' @useDynLib MultiModalR, .registration = TRUE
-NULL
+  # Version: 1.0.0
+  # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
+  # Based on MINLAM (depreciated) by Gergő Diószegi
+  
+  #' @import Rcpp
+  #' @importFrom Rcpp evalCpp
+  #' @useDynLib MultiModalR, .registration = TRUE
+  NULL
 
 #' Check and install required packages
 #' 
@@ -555,4 +555,4 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
   
   return(p)
-}
+} 
