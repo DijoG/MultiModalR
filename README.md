@@ -102,7 +102,7 @@ ggplot(df, aes(x = Value)) +
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         plot.title = element_text(hjust = .5))
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_001.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_001.png" width="550">
 
 ```r
 # Plot 02 ~ subgroups shown
@@ -124,7 +124,7 @@ ggplot(df, aes(x = Value, fill = Subpopulation)) +
         plot.title = element_text(hjust = .5)) +
   guides(fill = guide_legend(override.aes = list(alpha = .6)))
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_002.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_002.png" width="550">
 
 
 ### Parallel Processing Setup 
@@ -151,7 +151,7 @@ tictoc::toc()
 The function generates:
   - **Data CSV** files: Original data with assigned subgroups and probabilities
   
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="600">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="550">
 
 A **Data CSV** file consists of the following fields (maxNGROUP = 5):
   - `y`: Original/observed value
@@ -179,7 +179,7 @@ MultiModalR::plot_VALIDATION(
   value_col = "Value",
   id_col = "ID")
 ```
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_003.png">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_003.png" width="550">
 
 **Validation results show accurate subgroup assignment across categories.**
 
