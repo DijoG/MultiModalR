@@ -1,5 +1,5 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-# Version: 1.2.0
+# Version: 1.0.0
 # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
 # Based on MINLAM (depreciated) by Gergő Diószegi
 
@@ -15,8 +15,7 @@ NULL
 check_PACKS <- function() {
   required_packages = c(
     "tidyverse", "furrr", "future", "multimode", "Rcpp", "RcppArmadillo",
-    "truncnorm", "tictoc", "dplyr", "tidyr", "purrr", "readr", "ggplot2",
-    "dbscan"  # Added for 2D clustering
+    "truncnorm", "tictoc", "dplyr", "tidyr", "purrr", "readr", "ggplot2"
   )
   
   missing_packages = required_packages[!required_packages %in% installed.packages()]
@@ -47,69 +46,6 @@ get_NGRP <- function(y) {
                     n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)))
 }
 
-#' 2D clustering for detecting number of groups using y-values and density
-#'
-#' @param y vector, input data of a distribution
-#' @param method clustering method ("hdbscan", "dbscan", "optics", "kmeans_2d")
-#' @param minPts minimum points for density-based clustering (default: 5)
-#' @param eps epsilon parameter for DBSCAN/OPTICS (default: 0.2)
-#' @return integer number of groups detected
-#' @export
-get_NGRP_2d <- function(y, method = "hdbscan", minPts = 5, eps = 0.2) {
-  
-  n = length(y)
-  
-  # Create 2D feature matrix: [y, local_density]
-  # 1. Compute local density using simple KDE
-  bw = max(0.1, sd(y) * 0.3)  # Adaptive bandwidth
-  dens = stats::density(y, bw = bw, n = 256)
-  
-  # 2. Get density at each point
-  density_vals = approx(dens$x, dens$y, xout = y, rule = 2)$y
-  density_vals = (density_vals - min(density_vals)) / 
-    (max(density_vals) - min(density_vals) + 1e-10)  # Normalize 0-1
-  
-  # 3. Create 2D matrix (scale y to 0-1 as well for clustering)
-  y_scaled = (y - min(y)) / (max(y) - min(y) + 1e-10)
-  X = cbind(y = y_scaled, density = density_vals)
-  
-  # 4. Apply clustering
-  if(method == "hdbscan") {
-    # HDBSCAN (automatic cluster detection)
-    clust = dbscan::hdbscan(X, minPts = minPts)
-    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
-    
-  } else if(method == "dbscan") {
-    # DBSCAN
-    clust = dbscan::dbscan(X, eps = eps, minPts = minPts)
-    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
-    
-  } else if(method == "optics") {
-    # OPTICS
-    optics = dbscan::optics(X, eps = eps, minPts = minPts)
-    clust = dbscan::extractDBSCAN(optics, eps_cl = eps)
-    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
-    
-  } else if(method == "kmeans_2d") {
-    # k-means with elbow method to determine k
-    wss = numeric(5)
-    for(i in 1:5) {
-      km = kmeans(X, centers = i, nstart = 10)
-      wss[i] = km$tot.withinss
-    }
-    
-    # Simple elbow detection
-    diffs = diff(wss)
-    n_groups = which.max(diffs / wss[-length(wss)]) + 1
-    n_groups = min(n_groups, 5)
-  }
-  
-  # Ensure at least 1 group
-  n_groups = max(1, n_groups)
-  
-  return(n_groups)
-}
-
 #' Extract mode statistics from a mode forest
 #'
 #' @param y vector, input data of a distribution
@@ -121,104 +57,6 @@ get_MODES <- function(y, nmod) {
   modes = mm$locations[seq(1, length(mm$locations), by = 2)]
   mode_df = data.frame(Est_Mode = modes,
                        Group = 1:length(modes))
-  return(mode_df)
-}
-
-#' Extract mode statistics using 2D clustering
-#'
-#' @param y vector, input data of a distribution
-#' @param nmod numeric, count/number of subpopulations/subgroups (if NULL, auto-detect)
-#' @param method clustering method ("hdbscan", "dbscan", "optics", "kmeans_2d")
-#' @param minPts minimum points for density-based clustering (default: 5)
-#' @param eps epsilon parameter for DBSCAN/OPTICS (default: 0.2)
-#' @return data frame with estimated modes from cluster centers
-#' @export
-get_MODES_2d <- function(y, nmod = NULL, method = "hdbscan", minPts = 5, eps = 0.2) {
-  
-  # Auto-detect nmod if not provided
-  if(is.null(nmod)) {
-    nmod = get_NGRP_2d(y, method = method, minPts = minPts, eps = eps)
-  }
-  
-  n = length(y)
-  
-  # Create 2D feature matrix: [y, local_density]
-  bw = max(0.1, sd(y) * 0.3)  # Adaptive bandwidth
-  dens = stats::density(y, bw = bw, n = 256)
-  
-  # Get density at each point
-  density_vals = approx(dens$x, dens$y, xout = y, rule = 2)$y
-  density_vals = (density_vals - min(density_vals)) / 
-    (max(density_vals) - min(density_vals) + 1e-10)
-  
-  # Scale y to 0-1 for clustering
-  y_scaled = (y - min(y)) / (max(y) - min(y) + 1e-10)
-  X = cbind(y = y_scaled, density = density_vals)
-  
-  # Perform clustering to get assignments
-  clusters = integer(n)
-  
-  if(method == "hdbscan") {
-    clust = dbscan::hdbscan(X, minPts = minPts)
-    clusters = clust$cluster
-    
-  } else if(method == "dbscan") {
-    clust = dbscan::dbscan(X, eps = eps, minPts = minPts)
-    clusters = clust$cluster
-    
-  } else if(method == "optics") {
-    optics = dbscan::optics(X, eps = eps, minPts = minPts)
-    clust = dbscan::extractDBSCAN(optics, eps_cl = eps)
-    clusters = clust$cluster
-    
-  } else if(method == "kmeans_2d") {
-    # Force k to nmod for kmeans
-    km = kmeans(X, centers = nmod, nstart = 20)
-    clusters = km$cluster
-  }
-  
-  # Only keep points that are assigned to clusters (cluster > 0)
-  valid = clusters > 0
-  
-  if(sum(valid) == 0) {
-    # Fall back to original (bandwidth) method if no clusters found
-    warning("No clusters found with 2D method, falling back to bandwith get_MODES")
-    return(get_MODES(y, nmod))
-  }
-  
-  # Calculate cluster centers in original y-space
-  cluster_centers = numeric(0)
-  unique_clusters = unique(clusters[valid])
-  
-  for(clust_id in unique_clusters) {
-    cluster_points = y[clusters == clust_id]
-    if(length(cluster_points) > 0) {
-      # Use weighted mean: points with higher density have more weight
-      cluster_weights = density_vals[clusters == clust_id]
-      weighted_mean = sum(cluster_points * cluster_weights) / sum(cluster_weights)
-      cluster_centers = c(cluster_centers, weighted_mean)
-    }
-  }
-  
-  # Sort cluster centers
-  cluster_centers = sort(cluster_centers)
-  
-  # Ensure we have the requested number of modes
-  if(length(cluster_centers) < nmod) {
-    # Add modes from bandwidth method if needed
-    original_modes = get_MODES(y, nmod)$Est_Mode
-    all_modes = sort(unique(c(cluster_centers, original_modes)))
-    cluster_centers = all_modes[1:min(nmod, length(all_modes))]
-  } else if(length(cluster_centers) > nmod) {
-    # Keep the nmod most populated clusters
-    cluster_sizes = sapply(unique_clusters, function(cid) sum(clusters == cid))
-    top_clusters = unique_clusters[order(cluster_sizes, decreasing = TRUE)[1:nmod]]
-    cluster_centers = cluster_centers[unique_clusters %in% top_clusters]
-  }
-  
-  mode_df = data.frame(Est_Mode = cluster_centers,
-                        Group = 1:length(cluster_centers))
-  
   return(mode_df)
 }
 
@@ -389,29 +227,25 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   return(df)
 }
 
-#' Core function for mixture model MCMC with ID support - UPDATED WITH 2D OPTION
+#' Core function for mixture model MCMC with ID support
 #' 
 #' @param data Input data frame
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("dpi", "nrd", "bcv")
-#' @param mode_method Mode detection method ("bw", "2d")
+#' @param method Density estimator method
 #' @param within Range parameter for mode grouping
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param clustering_params List of parameters for 2D clustering (minPts, eps, method)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "dpi", mode_method = "bw",
-                             within = 0.03, maxNGROUP = 5, 
+                             method = "dpi", within = 0.03, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
-                             burnin = 500, proposal_sd = 0.15,
-                             clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")) {
+                             burnin = 500, proposal_sd = 0.15) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -442,36 +276,23 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     
     message("Processing category: ", cat)
     
-    # Mode detection - ORIGINAL (BANDWIDTH) APPROACH
+    # Mode detection
     n_grp_df = get_NGRP(y)
     n_grp = n_grp_df %>% 
       dplyr::filter(Method == method) %>% 
       dplyr::pull(n_grp)
-    n_grp = min(max(n_grp, 1), maxNGROUP)
+    n_grp = min(max(n_grp, 3), maxNGROUP)
     
-    message("  Detected ", n_grp, " components using method: ", method)
+    message("  Detected ", n_grp, " components")
     
-    # Get mode locations - CHOOSE METHOD
-    if(mode_method == "bw") {
-      modes_df = get_MODES(y, nmod = n_grp)
-      message("  Using bandwidth 1D mode detection")
-    } else if(mode_method == "2d") {
-      modes_df = get_MODES_2d(y, nmod = n_grp, 
-                              method = clustering_params$method,
-                              minPts = clustering_params$minPts,
-                              eps = clustering_params$eps)
-      message("  Using 2D clustering: ", clustering_params$method)
-    } else {
-      stop("mode_method must be 'bw' or '2d'")
-    }
-    
+    # Get mode locations
+    modes_df = get_MODES(y, nmod = n_grp)
     modes_grouped = group_MODES(modes_df, within = within)
     
     n_components = nrow(modes_grouped)
     prior_means = modes_grouped$Est_Mode
     
     message("  After grouping: ", n_components, " components")
-    message("  Prior means: ", paste(round(prior_means, 3), collapse = ", "))
     
     # Run MCMC WITH IDs
     mh_result = MM_MH(
@@ -527,7 +348,6 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
 #' @param method Density estimator method
-#' @param mode_method Mode detection method ("bw", "2d")
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
@@ -535,16 +355,13 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param clustering_params List of parameters for 2D clustering
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
-                          method = "dpi", mode_method = "bw",
-                          within = 0.03, maxNGROUP = 5, 
+                          method = "dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15,
-                          clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")) {
+                          proposal_sd = 0.15) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -569,7 +386,10 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   
   message("Processing ", length(categories), " categories in parallel with ", 
           n_workers, " workers: ", paste(categories, collapse = ", "))
-  message("Using method: ", method, " | Mode method: ", mode_method)
+  
+  if(!is.null(varID)) {
+    message("Including ID column: ", varID)
+  }
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -581,27 +401,25 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
     
-    # Use get_PROBCLASS_MH function
+    # Use the SAME get_PROBCLASS_MH function
     result = get_PROBCLASS_MH(
       data = cat_data,
       varCLASS = varCLASS,
       varY = varY,
       varID = varID,
       method = method,
-      mode_method = mode_method,
       within = within,
       maxNGROUP = maxNGROUP,
-      out_dir = out_dir,
+      out_dir = out_dir,  # Pass out_dir to each worker
       n_iter = n_iter,
       burnin = burnin,
-      proposal_sd = proposal_sd,
-      clustering_params = clustering_params
+      proposal_sd = proposal_sd
     )
     
     return(result)
     
   }, .options = furrr::furrr_options(
-    packages = "MultiModalR",
+    packages = "MultiModalR",  # Required package
     seed = TRUE
   ), .progress = TRUE)
   
@@ -617,6 +435,10 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       combined_result = do.call(rbind, result_list)
       message("Parallel analysis complete. Combined result has ", 
               nrow(combined_result), " rows.")
+      
+      if(!is.null(varID)) {
+        message("ID column included in output.")
+      }
       
       return(combined_result)
     } else {

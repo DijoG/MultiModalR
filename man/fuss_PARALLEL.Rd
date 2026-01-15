@@ -10,15 +10,13 @@ fuss_PARALLEL(
   varY,
   varID,
   method = "dpi",
-  mode_method = "bw",
-  within = 0.03,
+  within = 1,
   maxNGROUP = 5,
   out_dir = NULL,
   n_workers = 4,
   n_iter = 1000,
   burnin = 500,
-  proposal_sd = 0.15,
-  clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")
+  proposal_sd = 0.15
 )
 }
 \arguments{
@@ -31,8 +29,6 @@ fuss_PARALLEL(
 \item{varID}{Character, ID variable name (required)}
 
 \item{method}{Density estimator method}
-
-\item{mode_method}{Mode detection method ("bw", "2d")}
 
 \item{within}{Range parameter}
 
@@ -47,8 +43,6 @@ fuss_PARALLEL(
 \item{burnin}{Burn-in period (default: 500)}
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
-
-\item{clustering_params}{List of parameters for 2D clustering}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
