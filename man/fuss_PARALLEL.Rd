@@ -45,7 +45,7 @@ fuss_PARALLEL(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for SJ-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
+\item{sj_adjust}{Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files

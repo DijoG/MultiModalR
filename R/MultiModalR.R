@@ -31,7 +31,7 @@ check_PACKS <- function() {
 #' Obtain the number of groups based on bandwidth selection with SJ tuning
 #'
 #' @param y vector, input data of a distribution
-#' @param sj_adjust adjustment factor for SJ bandwidth (default: 1.0)
+#' @param sj_adjust adjustment factor for sj-dpi bandwidth (default: 1.0)
 #' @return data frame with methods and number of groups
 #' @export
 get_NGRP <- function(y, sj_adjust = 1.0) {
@@ -256,7 +256,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for SJ-dpi bandwidth detector (default: 1.0)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth detector (default: 1.0)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
@@ -379,7 +379,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for SJ-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
+#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 

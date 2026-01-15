@@ -9,7 +9,7 @@ get_NGRP(y, sj_adjust = 1)
 \arguments{
 \item{y}{vector, input data of a distribution}
 
-\item{sj_adjust}{adjustment factor for SJ bandwidth (default: 1.0)}
+\item{sj_adjust}{adjustment factor for sj-dpi bandwidth (default: 1.0)}
 }
 \value{
 data frame with methods and number of groups
