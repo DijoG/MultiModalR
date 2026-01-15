@@ -89,7 +89,8 @@ group_MODES <- function(df, within = 0.1) {
   
   df %>%
     dplyr::group_by(group) %>%
-    dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop")
+    dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop") %>%
+    dplyr::arrange(Est_Mode)
 }
 
 #' Fast MCMC for mixture models (C++ implementation)
