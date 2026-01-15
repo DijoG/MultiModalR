@@ -29,7 +29,7 @@ fuss_PARALLEL(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method (default: "sj-dpi")}
+\item{method}{Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")}
 
 \item{within}{Range parameter}
 

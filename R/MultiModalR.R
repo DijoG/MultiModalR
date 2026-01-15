@@ -1,12 +1,12 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-  # Version: 1.0.0
-  # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
-  # Based on MINLAM (depreciated) by Gergő Diószegi
-  
-  #' @import Rcpp
-  #' @importFrom Rcpp evalCpp
-  #' @useDynLib MultiModalR, .registration = TRUE
-  NULL
+# Version: 1.0.0
+# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
+# Based on MINLAM (depreciated) by Gergő Diószegi
+
+#' @import Rcpp
+#' @importFrom Rcpp evalCpp
+#' @useDynLib MultiModalR, .registration = TRUE
+NULL
 
 #' Check and install required packages
 #' 
@@ -249,7 +249,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method
+#' @param method Density estimator method ("sj-dpi", "bcv", "nrd")
 #' @param within Range parameter for mode grouping (default: 0.1)
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
@@ -282,6 +282,13 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     stop("varID '", varID, "' not found in data")
   }
   
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
+  
   categories = unique(data[[varCLASS]])
   results = list()
   
@@ -293,10 +300,19 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     ids = cat_data[[varID]]
     
     message("Processing category: ", cat)
-    message("  SJ adjustment factor: ", sj_adjust)
+    
+    # Determine effective sj_adjust value
+    # Only use sj_adjust for method = "sj-dpi", otherwise use 1.0
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    
+    if(method == "sj-dpi") {
+      message("  Using SJ-dpi with adjustment: ", sj_adjust)
+    } else {
+      message("  Using method: ", method, " (sj_adjust ignored)")
+    }
     
     # Mode detection WITH SJ TUNING
-    n_grp_df = get_NGRP(y, sj_adjust = sj_adjust)
+    n_grp_df = get_NGRP(y, sj_adjust = effective_sj_adjust)
     n_grp = n_grp_df %>% 
       dplyr::filter(Method == method) %>% 
       dplyr::pull(n_grp)
@@ -371,7 +387,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method (default: "sj-dpi")
+#' @param method Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
@@ -411,7 +427,13 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   
   message("Processing ", length(categories), " categories in parallel with ", 
           n_workers, " workers")
-  message("SJ adjustment factor: ", sj_adjust)
+  
+  # Warn if sj_adjust is used with non-sj-dpi method
+  if(method != "sj-dpi" && sj_adjust != 1.0) {
+    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
+            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
+            "  Using sj_adjust = 1.0 for method = '", method, "'.")
+  }
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -422,6 +444,9 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     # Get category name
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
+    
+    # Determine effective sj_adjust value
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
     
     # Use get_PROBCLASS_MH with sj_adjust parameter
     result = get_PROBCLASS_MH(
@@ -436,7 +461,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      sj_adjust = sj_adjust
+      sj_adjust = effective_sj_adjust
     )
     
     return(result)
@@ -574,4 +599,4 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
   
   return(p)
-} 
+}

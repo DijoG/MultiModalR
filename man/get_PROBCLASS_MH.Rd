@@ -28,7 +28,7 @@ get_PROBCLASS_MH(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method}
+\item{method}{Density estimator method ("sj-dpi", "bcv", "nrd")}
 
 \item{within}{Range parameter for mode grouping (default: 0.1)}
 
