@@ -9,7 +9,7 @@ fuss_PARALLEL(
   varCLASS,
   varY,
   varID,
-  method = "dpi",
+  method = "sj-dpi",
   within = 1,
   maxNGROUP = 5,
   out_dir = NULL,
@@ -29,7 +29,7 @@ fuss_PARALLEL(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method}
+\item{method}{Density estimator method (default: "sj-dpi")}
 
 \item{within}{Range parameter}
 
@@ -45,7 +45,7 @@ fuss_PARALLEL(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for SJ bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
+\item{sj_adjust}{Adjustment factor for SJ-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files

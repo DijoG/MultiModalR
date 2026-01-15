@@ -56,7 +56,7 @@ get_NGRP <- function(y, sj_adjust = 1.0) {
   sj_nmod = multimode::nmodes(y, bw = bwSJ_tuned)
   
   return(data.frame(
-    Method = c("nrd", "bcv", "dpi"),
+    Method = c("nrd", "bcv", "sj-dpi"),
     Bandwidth = c(bwRT, bwBCV, bwSJ_tuned),
     n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)
   ))
@@ -250,17 +250,17 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
 #' @param method Density estimator method
-#' @param within Range parameter for mode grouping
+#' @param within Range parameter for mode grouping (default: 0.1)
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for SJ bandwidth (default: 1.0)
+#' @param sj_adjust Adjustment factor for SJ-dpi bandwidth detector (default: 1.0)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "dpi", within = 0.03, maxNGROUP = 5, 
+                             method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
                              burnin = 500, proposal_sd = 0.15,
                              sj_adjust = 1.0) {
@@ -300,7 +300,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     n_grp = n_grp_df %>% 
       dplyr::filter(Method == method) %>% 
       dplyr::pull(n_grp)
-    n_grp = min(max(n_grp, 3), maxNGROUP)
+    n_grp = min(max(n_grp, 2), maxNGROUP)
     
     # Get bandwidth used for debugging
     bandwidth_used = n_grp_df %>% 
@@ -371,7 +371,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method
+#' @param method Density estimator method (default: "sj-dpi")
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
@@ -379,11 +379,11 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for SJ bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
+#' @param sj_adjust Adjustment factor for SJ-dpi bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
-                          method = "dpi", within = 1, maxNGROUP = 5, 
+                          method = "sj-dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
                           proposal_sd = 0.15, sj_adjust = 1.0) {

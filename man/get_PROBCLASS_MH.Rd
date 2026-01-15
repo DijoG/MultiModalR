@@ -9,8 +9,8 @@ get_PROBCLASS_MH(
   varCLASS,
   varY,
   varID,
-  method = "dpi",
-  within = 0.03,
+  method = "sj-dpi",
+  within = 0.1,
   maxNGROUP = 5,
   out_dir = NULL,
   n_iter = 1000,
@@ -30,7 +30,7 @@ get_PROBCLASS_MH(
 
 \item{method}{Density estimator method}
 
-\item{within}{Range parameter for mode grouping}
+\item{within}{Range parameter for mode grouping (default: 0.1)}
 
 \item{maxNGROUP}{Maximum number of groups}
 
@@ -42,7 +42,7 @@ get_PROBCLASS_MH(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for SJ bandwidth (default: 1.0)}
+\item{sj_adjust}{Adjustment factor for SJ-dpi bandwidth detector (default: 1.0)}
 }
 \value{
 Data frame or writes CSV files to out_dir
