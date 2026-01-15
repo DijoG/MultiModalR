@@ -2,18 +2,16 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_MODES}
 \alias{get_MODES}
-\title{Extract mode statistics from a mode forest}
+\title{Obtain modes using various bandwidth selection methods}
 \usage{
-get_MODES(y, nmod)
+get_MODES(y)
 }
 \arguments{
 \item{y}{vector, input data of a distribution}
-
-\item{nmod}{numeric, count/number of subpopulations/subgroups}
 }
 \value{
-data frame with estimated modes
+data frame with estimated modes, methods
 }
 \description{
-Extract mode statistics from a mode forest
+Obtain modes using various bandwidth selection methods
 }
