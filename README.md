@@ -65,7 +65,7 @@ library(tidyverse);library(truncnorm)
 set.seed(5)
 
 # Define nine categories with three subpopulations
-categories <- rep(LETTERS[1:9], each = 75)
+categories <- rep(paste0(LETTERS[1:9], LETTERS[1:9]), each = 75)
 subpopulations <- rep(rep(c("Group 1", "Group 2", "Group 3"), each = 25), times = 9)
 
 # Generate data with single-peaked distributions within each subgroup
