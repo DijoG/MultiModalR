@@ -151,7 +151,7 @@ tictoc::toc()
 The function generates:
   - **Data CSV** files: Original data with assigned subgroups and probabilities
   
-<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="400">
+<img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="600">
 
 A **Data CSV** file consists of the following fields (maxNGROUP = 5):
   - `y`: Original/observed value
