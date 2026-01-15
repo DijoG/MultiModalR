@@ -2,22 +2,22 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_PROBCLASS_MH}
 \alias{get_PROBCLASS_MH}
-\title{Core function for mixture model MCMC with ID support and improved initialization}
+\title{Core function for mixture model MCMC with ID support - UPDATED WITH 2D OPTION}
 \usage{
 get_PROBCLASS_MH(
   data,
   varCLASS,
   varY,
   varID,
-  method = "adaptive",
-  mode_method = "adaptive",
+  method = "dpi",
+  mode_method = "bw",
   within = 0.03,
   maxNGROUP = 5,
   out_dir = NULL,
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  seed = 123
+  clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")
 )
 }
 \arguments{
@@ -29,9 +29,9 @@ get_PROBCLASS_MH(
 
 \item{varID}{Character, ID variable name (required)}
 
-\item{method}{Density estimator method ("adaptive", "silverman", "SJ", "dpi", "nrd", "bcv", or "gmm")}
+\item{method}{Density estimator method ("dpi", "nrd", "bcv")}
 
-\item{mode_method}{Mode detection method ("adaptive", "gmm", or "kde")}
+\item{mode_method}{Mode detection method ("bw", "2d")}
 
 \item{within}{Range parameter for mode grouping}
 
@@ -45,11 +45,11 @@ get_PROBCLASS_MH(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{seed}{Random seed}
+\item{clustering_params}{List of parameters for 2D clustering (minPts, eps, method)}
 }
 \value{
 Data frame or writes CSV files to out_dir
 }
 \description{
-Core function for mixture model MCMC with ID support and improved initialization
+Core function for mixture model MCMC with ID support - UPDATED WITH 2D OPTION
 }

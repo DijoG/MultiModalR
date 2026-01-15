@@ -2,15 +2,15 @@
 % Please edit documentation in R/MultiModalR.R
 \name{fuss_PARALLEL}
 \alias{fuss_PARALLEL}
-\title{Parallel wrapper around get_PROBCLASS_MH with improved initialization}
+\title{Parallel wrapper around get_PROBCLASS_MH}
 \usage{
 fuss_PARALLEL(
   data,
   varCLASS,
   varY,
   varID,
-  method = "adaptive",
-  mode_method = "adaptive",
+  method = "dpi",
+  mode_method = "bw",
   within = 0.03,
   maxNGROUP = 5,
   out_dir = NULL,
@@ -18,7 +18,7 @@ fuss_PARALLEL(
   n_iter = 1000,
   burnin = 500,
   proposal_sd = 0.15,
-  seed = 123
+  clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")
 )
 }
 \arguments{
@@ -32,7 +32,7 @@ fuss_PARALLEL(
 
 \item{method}{Density estimator method}
 
-\item{mode_method}{Mode detection method}
+\item{mode_method}{Mode detection method ("bw", "2d")}
 
 \item{within}{Range parameter}
 
@@ -48,11 +48,11 @@ fuss_PARALLEL(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{seed}{Random seed}
+\item{clustering_params}{List of parameters for 2D clustering}
 }
 \value{
 Data frame (if out_dir is NULL) or writes CSV files
 }
 \description{
-Parallel wrapper around get_PROBCLASS_MH with improved initialization
+Parallel wrapper around get_PROBCLASS_MH
 }

@@ -2,22 +2,16 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_NGRP}
 \alias{get_NGRP}
-\title{Efficient number of groups detection using adaptive methods}
+\title{Obtain the number of groups based on bandwidth selection}
 \usage{
-get_NGRP(y, method = "adaptive", max_groups = 5, min_bw = 0.1)
+get_NGRP(y)
 }
 \arguments{
 \item{y}{vector, input data of a distribution}
-
-\item{method}{Detection method ("silverman", "SJ", "adaptive", or "dpi" for backward compatibility)}
-
-\item{max_groups}{Maximum number of groups to return (default: 5)}
-
-\item{min_bw}{Minimum bandwidth to prevent overfitting (default: 0.1)}
 }
 \value{
-Number of groups (integer) or data frame with methods and number of groups (for backward compatibility)
+data frame with methods and number of groups
 }
 \description{
-Efficient number of groups detection using adaptive methods
+Obtain the number of groups based on bandwidth selection
 }

@@ -1,5 +1,5 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
-# Version: 1.1.0
+# Version: 1.2.0
 # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
 # Based on MINLAM (depreciated) by Gergő Diószegi
 
@@ -15,7 +15,8 @@ NULL
 check_PACKS <- function() {
   required_packages = c(
     "tidyverse", "furrr", "future", "multimode", "Rcpp", "RcppArmadillo",
-    "truncnorm", "tictoc", "dplyr", "tidyr", "purrr", "readr", "ggplot2"
+    "truncnorm", "tictoc", "dplyr", "tidyr", "purrr", "readr", "ggplot2",
+    "dbscan"  # Added for 2D clustering
   )
   
   missing_packages = required_packages[!required_packages %in% installed.packages()]
@@ -28,279 +29,195 @@ check_PACKS <- function() {
   }
 }
 
-#' Efficient number of groups detection using adaptive methods
+#' Obtain the number of groups based on bandwidth selection
 #'
 #' @param y vector, input data of a distribution
-#' @param method Detection method ("silverman", "SJ", "adaptive", or "dpi" for backward compatibility)
-#' @param max_groups Maximum number of groups to return (default: 5)
-#' @param min_bw Minimum bandwidth to prevent overfitting (default: 0.1)
-#' @return Number of groups (integer) or data frame with methods and number of groups (for backward compatibility)
+#' @return data frame with methods and number of groups
 #' @export
-get_NGRP <- function(y, method = "adaptive", max_groups = 5, min_bw = 0.1) {
+get_NGRP <- function(y) {
+  bwRT = stats::bw.nrd(y)                 # Scott's 1.06
+  bwSJ = stats::bw.SJ(y, method = "dpi")  # Sheather & Jones' direct plug-in method
+  bwBCV = stats::bw.bcv(y)                # Biased cross-validation
   
-  # For backward compatibility: if method is "dpi", "nrd", or "bcv", use original approach
-  if(method %in% c("dpi", "nrd", "bcv")) {
-    bwRT = stats::bw.nrd(y)                 # Scott's 1.06
-    bwSJ = stats::bw.SJ(y, method = "dpi")  # Sheather & Jones' direct plug-in method
-    bwBCV = stats::bw.bcv(y)                # Biased cross-validation
-    
-    nrd_nmod = multimode::nmodes(y, bw = bwRT)
-    sj_nmod = multimode::nmodes(y, bw = bwSJ)
-    bcv_nmod = multimode::nmodes(y, bw = bwBCV)
-    
-    return(data.frame(Method = c("nrd", "bcv", "dpi"),
-                      n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)))
-  }
+  nrd_nmod = multimode::nmodes(y, bw = bwRT)
+  sj_nmod = multimode::nmodes(y, bw = bwSJ)
+  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
   
-  # New adaptive methods
-  n <- length(y)
-  
-  if(method == "silverman") {
-    # Silverman's rule of thumb (fast and robust)
-    sigma <- stats::sd(y)
-    iqr <- stats::IQR(y)
-    sigma_robust <- min(sigma, iqr/1.34, na.rm = TRUE)
-    bw <- 0.9 * sigma_robust * n^(-0.2)
-    bw <- max(bw, min_bw)
-    
-    dens <- stats::density(y, bw = bw, n = 512)
-    peaks <- which(diff(sign(diff(dens$y))) < 0) + 1
-    n_modes <- length(peaks)
-    
-  } else if(method == "SJ") {
-    # Sheather-Jones plug-in (more precise but slower)
-    bw <- stats::bw.SJ(y, method = "dpi")
-    bw <- max(bw, min_bw)
-    
-    dens <- stats::density(y, bw = bw, n = 512)
-    peaks <- which(diff(sign(diff(dens$y))) < 0) + 1
-    n_modes <- length(peaks)
-    
-  } else if(method == "adaptive") {
-    # Adaptive method: choose based on sample size and variance
-    data_variance <- var(y)
-    
-    if(n < 50 || data_variance < 0.1) {
-      # Small sample or low variance: prefer simpler approach
-      if(stats::IQR(y) / stats::sd(y) < 0.5) {
-        n_modes <- 1
-      } else {
-        # Try Silverman's rule
-        sigma <- stats::sd(y)
-        iqr <- stats::IQR(y)
-        sigma_robust <- min(sigma, iqr/1.34, na.rm = TRUE)
-        bw <- 0.9 * sigma_robust * n^(-0.2)
-        bw <- max(bw, min_bw)
-        
-        dens <- stats::density(y, bw = bw, n = 256)
-        peaks <- which(diff(sign(diff(dens$y))) < 0) + 1
-        n_modes <- max(1, min(length(peaks), 2))  # Limit to 2 for small samples
-      }
-    } else {
-      # Larger sample: use multiple bandwidths and take consensus
-      bw_candidates <- c(
-        stats::bw.nrd(y),
-        stats::bw.SJ(y, method = "dpi"),
-        stats::bw.ucv(y)
-      )
-      
-      n_modes_candidates <- sapply(bw_candidates, function(bw) {
-        bw <- max(bw, min_bw)
-        dens <- stats::density(y, bw = bw, n = 256)
-        peaks <- which(diff(sign(diff(dens$y))) < 0) + 1
-        length(peaks)
-      })
-      
-      # Use median number of modes
-      n_modes <- stats::median(n_modes_candidates, na.rm = TRUE)
-    }
-  }
-  
-  # Ensure reasonable bounds
-  n_modes <- max(1, min(n_modes, max_groups, na.rm = TRUE))
-  
-  return(n_modes)
+  return(data.frame(Method = c("nrd", "bcv", "dpi"),
+                    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)))
 }
 
-#' Fast Gaussian Mixture Model initialization using k-means++
-#' 
-#' @param y vector, input data
-#' @param k number of components (if NULL, uses adaptive selection)
-#' @param max_k maximum components to consider (default: 5)
-#' @param n_init number of k-means initializations (default: 10)
-#' @return list with means, sds, and weights
-#' @keywords internal
-init_gmm_fast <- function(y, k = NULL, max_k = 5, n_init = 10) {
+#' 2D clustering for detecting number of groups using y-values and density
+#'
+#' @param y vector, input data of a distribution
+#' @param method clustering method ("hdbscan", "dbscan", "optics", "kmeans_2d")
+#' @param minPts minimum points for density-based clustering (default: 5)
+#' @param eps epsilon parameter for DBSCAN/OPTICS (default: 0.2)
+#' @return integer number of groups detected
+#' @export
+get_NGRP_2d <- function(y, method = "hdbscan", minPts = 5, eps = 0.2) {
   
-  n <- length(y)
+  n = length(y)
   
-  if(is.null(k)) {
-    # Adaptive selection based on data characteristics
-    if(n < 30) {
-      k <- 1
-    } else if(n < 100) {
-      k <- min(2, max_k)
-    } else {
-      # Use Silverman's rule for larger samples
-      k <- get_NGRP(y, method = "silverman", max_groups = max_k)
+  # Create 2D feature matrix: [y, local_density]
+  # 1. Compute local density using simple KDE
+  bw = max(0.1, sd(y) * 0.3)  # Adaptive bandwidth
+  dens = stats::density(y, bw = bw, n = 256)
+  
+  # 2. Get density at each point
+  density_vals = approx(dens$x, dens$y, xout = y, rule = 2)$y
+  density_vals = (density_vals - min(density_vals)) / 
+    (max(density_vals) - min(density_vals) + 1e-10)  # Normalize 0-1
+  
+  # 3. Create 2D matrix (scale y to 0-1 as well for clustering)
+  y_scaled = (y - min(y)) / (max(y) - min(y) + 1e-10)
+  X = cbind(y = y_scaled, density = density_vals)
+  
+  # 4. Apply clustering
+  if(method == "hdbscan") {
+    # HDBSCAN (automatic cluster detection)
+    clust = dbscan::hdbscan(X, minPts = minPts)
+    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
+    
+  } else if(method == "dbscan") {
+    # DBSCAN
+    clust = dbscan::dbscan(X, eps = eps, minPts = minPts)
+    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
+    
+  } else if(method == "optics") {
+    # OPTICS
+    optics = dbscan::optics(X, eps = eps, minPts = minPts)
+    clust = dbscan::extractDBSCAN(optics, eps_cl = eps)
+    n_groups = length(unique(clust$cluster[clust$cluster > 0]))
+    
+  } else if(method == "kmeans_2d") {
+    # k-means with elbow method to determine k
+    wss = numeric(5)
+    for(i in 1:5) {
+      km = kmeans(X, centers = i, nstart = 10)
+      wss[i] = km$tot.withinss
     }
+    
+    # Simple elbow detection
+    diffs = diff(wss)
+    n_groups = which.max(diffs / wss[-length(wss)]) + 1
+    n_groups = min(n_groups, 5)
   }
   
-  k <- max(1, min(k, max_k, n))
+  # Ensure at least 1 group
+  n_groups = max(1, n_groups)
   
-  # k-means++ initialization
-  best_inertia <- Inf
-  best_centers <- numeric(k)
-  
-  for(init_idx in 1:n_init) {
-    # First center random
-    centers <- numeric(k)
-    centers[1] <- y[sample.int(n, 1)]
-    
-    # Subsequent centers with probability proportional to distance^2
-    for(i in 2:k) {
-      distances <- sapply(centers[1:(i-1)], function(c) (y - c)^2)
-      min_distances <- apply(distances, 1, min)
-      probs <- min_distances / sum(min_distances)
-      centers[i] <- y[sample.int(n, 1, prob = probs)]
-    }
-    
-    # Quick assignment
-    distances <- sapply(centers, function(c) (y - c)^2)
-    assignments <- apply(distances, 1, which.min)
-    
-    # Calculate inertia
-    inertia <- sum((y - centers[assignments])^2)
-    
-    if(inertia < best_inertia) {
-      best_inertia <- inertia
-      best_centers <- centers
-      best_assignments <- assignments
-    }
-  }
-  
-  # Calculate within-cluster statistics
-  within_sds <- numeric(k)
-  weights <- numeric(k)
-  
-  for(i in 1:k) {
-    cluster_points <- y[best_assignments == i]
-    if(length(cluster_points) > 1) {
-      within_sds[i] <- max(stats::sd(cluster_points), 0.1)
-    } else {
-      within_sds[i] <- max(stats::sd(y) / 2, 0.1)
-    }
-    weights[i] <- sum(best_assignments == i) / n
-  }
-  
-  # Sort by center value for consistency
-  sort_order <- order(best_centers)
-  best_centers <- best_centers[sort_order]
-  within_sds <- within_sds[sort_order]
-  weights <- weights[sort_order]
-  
-  return(list(means = best_centers,
-              sds = within_sds,
-              weights = weights,
-              k = k,
-              assignments = best_assignments))
+  return(n_groups)
 }
 
-#' Optimized multimodal detection for MCMC initialization
-#' 
-#' @param y vector, input data
-#' @param nmod number of modes/components to detect (if NULL, auto-detected)
-#' @param method detection method ("kde", "gmm", or "adaptive")
-#' @param within range for grouping close modes (default: 0.1)
-#' @param max_components maximum components (default: 5)
-#' @return data frame with estimated modes and group assignments
+#' Extract mode statistics from a mode forest
+#'
+#' @param y vector, input data of a distribution
+#' @param nmod numeric, count/number of subpopulations/subgroups  
+#' @return data frame with estimated modes
 #' @export
-get_MODES <- function(y, nmod = NULL, method = "adaptive", within = 0.1, max_components = 5) {
+get_MODES <- function(y, nmod) {
+  mm = multimode::locmodes(y, mod0 = nmod)
+  modes = mm$locations[seq(1, length(mm$locations), by = 2)]
+  mode_df = data.frame(Est_Mode = modes,
+                       Group = 1:length(modes))
+  return(mode_df)
+}
+
+#' Extract mode statistics using 2D clustering
+#'
+#' @param y vector, input data of a distribution
+#' @param nmod numeric, count/number of subpopulations/subgroups (if NULL, auto-detect)
+#' @param method clustering method ("hdbscan", "dbscan", "optics", "kmeans_2d")
+#' @param minPts minimum points for density-based clustering (default: 5)
+#' @param eps epsilon parameter for DBSCAN/OPTICS (default: 0.2)
+#' @return data frame with estimated modes from cluster centers
+#' @export
+get_MODES_2d <- function(y, nmod = NULL, method = "hdbscan", minPts = 5, eps = 0.2) {
   
-  n <- length(y)
-  
+  # Auto-detect nmod if not provided
   if(is.null(nmod)) {
-    # Auto-detect number of modes
-    nmod <- get_NGRP(y, method = ifelse(method == "gmm", "silverman", method), 
-                     max_groups = max_components)
+    nmod = get_NGRP_2d(y, method = method, minPts = minPts, eps = eps)
   }
   
-  nmod <- max(1, min(nmod, max_components, n))
+  n = length(y)
   
-  if(method == "gmm") {
-    # Use GMM initialization for means
-    gmm_result <- init_gmm_fast(y, k = nmod, max_k = max_components)
-    modes <- gmm_result$means
+  # Create 2D feature matrix: [y, local_density]
+  bw = max(0.1, sd(y) * 0.3)  # Adaptive bandwidth
+  dens = stats::density(y, bw = bw, n = 256)
+  
+  # Get density at each point
+  density_vals = approx(dens$x, dens$y, xout = y, rule = 2)$y
+  density_vals = (density_vals - min(density_vals)) / 
+    (max(density_vals) - min(density_vals) + 1e-10)
+  
+  # Scale y to 0-1 for clustering
+  y_scaled = (y - min(y)) / (max(y) - min(y) + 1e-10)
+  X = cbind(y = y_scaled, density = density_vals)
+  
+  # Perform clustering to get assignments
+  clusters = integer(n)
+  
+  if(method == "hdbscan") {
+    clust = dbscan::hdbscan(X, minPts = minPts)
+    clusters = clust$cluster
     
-    mode_df <- data.frame(Est_Mode = modes,
-                          Group = 1:length(modes))
+  } else if(method == "dbscan") {
+    clust = dbscan::dbscan(X, eps = eps, minPts = minPts)
+    clusters = clust$cluster
     
-  } else if(method == "adaptive") {
-    # Adaptive approach: try multiple methods
+  } else if(method == "optics") {
+    optics = dbscan::optics(X, eps = eps, minPts = minPts)
+    clust = dbscan::extractDBSCAN(optics, eps_cl = eps)
+    clusters = clust$cluster
     
-    # Method 1: KDE with Silverman's rule
-    sigma <- stats::sd(y)
-    iqr <- stats::IQR(y)
-    sigma_robust <- min(sigma, iqr/1.34, na.rm = TRUE)
-    bw_silverman <- 0.9 * sigma_robust * n^(-0.2)
-    bw_silverman <- max(bw_silverman, 0.1)
-    
-    dens_silverman <- stats::density(y, bw = bw_silverman, n = 512)
-    peaks_silverman <- which(diff(sign(diff(dens_silverman$y))) < 0) + 1
-    modes_silverman <- dens_silverman$x[peaks_silverman]
-    
-    # Method 2: GMM initialization
-    gmm_result <- init_gmm_fast(y, k = min(nmod, length(modes_silverman)), 
-                                max_k = max_components)
-    modes_gmm <- gmm_result$means
-    
-    # Combine and average similar modes
-    all_modes <- c(modes_silverman, modes_gmm)
-    
-    if(length(all_modes) > 0) {
-      # Group similar modes
-      all_modes <- sort(all_modes)
-      groups <- list()
-      current_group <- all_modes[1]
-      
-      for(i in 2:length(all_modes)) {
-        if(all_modes[i] - current_group[length(current_group)] < within) {
-          current_group <- c(current_group, all_modes[i])
-        } else {
-          groups <- c(groups, list(current_group))
-          current_group <- all_modes[i]
-        }
-      }
-      groups <- c(groups, list(current_group))
-      
-      # Take average of each group
-      modes <- sapply(groups, mean)
-      
-      # Limit to requested number
-      if(length(modes) > nmod) {
-        # Keep the most prominent modes (based on density)
-        dens <- stats::density(y, bw = bw_silverman, n = 512)
-        mode_densities <- sapply(modes, function(m) {
-          idx <- which.min(abs(dens$x - m))
-          dens$y[idx]
-        })
-        modes <- modes[order(mode_densities, decreasing = TRUE)[1:nmod]]
-        modes <- sort(modes)
-      }
-    } else {
-      modes <- mean(y)
+  } else if(method == "kmeans_2d") {
+    # Force k to nmod for kmeans
+    km = kmeans(X, centers = nmod, nstart = 20)
+    clusters = km$cluster
+  }
+  
+  # Only keep points that are assigned to clusters (cluster > 0)
+  valid = clusters > 0
+  
+  if(sum(valid) == 0) {
+    # Fall back to original (bandwidth) method if no clusters found
+    warning("No clusters found with 2D method, falling back to bandwith get_MODES")
+    return(get_MODES(y, nmod))
+  }
+  
+  # Calculate cluster centers in original y-space
+  cluster_centers = numeric(0)
+  unique_clusters = unique(clusters[valid])
+  
+  for(clust_id in unique_clusters) {
+    cluster_points = y[clusters == clust_id]
+    if(length(cluster_points) > 0) {
+      # Use weighted mean: points with higher density have more weight
+      cluster_weights = density_vals[clusters == clust_id]
+      weighted_mean = sum(cluster_points * cluster_weights) / sum(cluster_weights)
+      cluster_centers = c(cluster_centers, weighted_mean)
     }
-    
-    mode_df <- data.frame(Est_Mode = modes,
-                          Group = 1:length(modes))
-    
-  } else {
-    # Original multimode::locmodes method (for backward compatibility)
-    mm <- multimode::locmodes(y, mod0 = nmod)
-    modes <- mm$locations[seq(1, length(mm$locations), by = 2)]
-    mode_df <- data.frame(Est_Mode = modes,
-                          Group = 1:length(modes))
   }
+  
+  # Sort cluster centers
+  cluster_centers = sort(cluster_centers)
+  
+  # Ensure we have the requested number of modes
+  if(length(cluster_centers) < nmod) {
+    # Add modes from bandwidth method if needed
+    original_modes = get_MODES(y, nmod)$Est_Mode
+    all_modes = sort(unique(c(cluster_centers, original_modes)))
+    cluster_centers = all_modes[1:min(nmod, length(all_modes))]
+  } else if(length(cluster_centers) > nmod) {
+    # Keep the nmod most populated clusters
+    cluster_sizes = sapply(unique_clusters, function(cid) sum(clusters == cid))
+    top_clusters = unique_clusters[order(cluster_sizes, decreasing = TRUE)[1:nmod]]
+    cluster_centers = cluster_centers[unique_clusters %in% top_clusters]
+  }
+  
+  mode_df = data.frame(Est_Mode = cluster_centers,
+                        Group = 1:length(cluster_centers))
   
   return(mode_df)
 }
@@ -312,9 +229,7 @@ get_MODES <- function(y, nmod = NULL, method = "adaptive", within = 0.1, max_com
 #' @return data frame with grouped modes
 #' @export
 group_MODES <- function(df, within = 0.1) {
-  if(nrow(df) <= 1) return(df)
-  
-  df <- df %>%
+  df = df %>%
     dplyr::arrange(Est_Mode) %>%
     dplyr::mutate(group = cumsum(c(1, diff(Est_Mode) > within)))
   
@@ -365,16 +280,13 @@ MM_MH <- function(y, grp, prior_means = NULL, ids,
   }
   
   if(is.null(prior_means)) {
-    # Use optimized initialization
-    gmm_init <- init_gmm_fast(y, k = grp)
-    prior_means <- gmm_init$means
+    prior_means = seq(min(y), max(y), length.out = grp)
   }
   
   # Ensure prior_means matches grp
   if(length(prior_means) != grp) {
-    warning("prior_means length doesn't match grp. Using GMM initialization.")
-    gmm_init <- init_gmm_fast(y, k = grp)
-    prior_means <- gmm_init$means
+    warning("prior_means length doesn't match grp. Using equally spaced means.")
+    prior_means = seq(min(y), max(y), length.out = grp)
   }
   
   result = MM_MH_cpp(
@@ -477,29 +389,29 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
   return(df)
 }
 
-#' Core function for mixture model MCMC with ID support and improved initialization
+#' Core function for mixture model MCMC with ID support - UPDATED WITH 2D OPTION
 #' 
 #' @param data Input data frame
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("adaptive", "silverman", "SJ", "dpi", "nrd", "bcv", or "gmm")
-#' @param mode_method Mode detection method ("adaptive", "gmm", or "kde")
+#' @param method Density estimator method ("dpi", "nrd", "bcv")
+#' @param mode_method Mode detection method ("bw", "2d")
 #' @param within Range parameter for mode grouping
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns data frame)
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param seed Random seed
+#' @param clustering_params List of parameters for 2D clustering (minPts, eps, method)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "adaptive", mode_method = "adaptive",
+                             method = "dpi", mode_method = "bw",
                              within = 0.03, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
                              burnin = 500, proposal_sd = 0.15,
-                             seed = 123) {
+                             clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -529,51 +441,40 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     ids = cat_data[[varID]]
     
     message("Processing category: ", cat)
-    message("  Sample size: ", length(y))
     
-    # Determine number of groups using improved method
-    if(method %in% c("dpi", "nrd", "bcv")) {
-      # Backward compatibility mode
-      n_grp_df <- get_NGRP(y)  # Returns data frame
-      n_grp <- n_grp_df %>% 
-        dplyr::filter(Method == method) %>% 
-        dplyr::pull(n_grp)
-    } else {
-      # New adaptive methods
-      n_grp <- get_NGRP(y, method = method, max_groups = maxNGROUP)
-    }
+    # Mode detection - ORIGINAL (BANDWIDTH) APPROACH
+    n_grp_df = get_NGRP(y)
+    n_grp = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(n_grp)
+    n_grp = min(max(n_grp, 1), maxNGROUP)
     
-    n_grp <- min(max(n_grp, 1), maxNGROUP)
     message("  Detected ", n_grp, " components using method: ", method)
     
-    # Get mode locations with improved initialization
-    modes_df <- get_MODES(y, nmod = n_grp, method = mode_method, 
-                          within = within, max_components = maxNGROUP)
-    
-    # Group modes that are very close
-    modes_grouped <- group_MODES(modes_df, within = within)
-    
-    n_components <- nrow(modes_grouped)
-    
-    # If grouping reduced components, adjust n_grp
-    if(n_components < n_grp) {
-      message("  Mode grouping reduced components from ", n_grp, " to ", n_components)
-      n_grp <- n_components
+    # Get mode locations - CHOOSE METHOD
+    if(mode_method == "bw") {
+      modes_df = get_MODES(y, nmod = n_grp)
+      message("  Using bandwidth 1D mode detection")
+    } else if(mode_method == "2d") {
+      modes_df = get_MODES_2d(y, nmod = n_grp, 
+                              method = clustering_params$method,
+                              minPts = clustering_params$minPts,
+                              eps = clustering_params$eps)
+      message("  Using 2D clustering: ", clustering_params$method)
+    } else {
+      stop("mode_method must be 'bw' or '2d'")
     }
     
-    prior_means <- modes_grouped$Est_Mode
+    modes_grouped = group_MODES(modes_df, within = within)
     
-    # Ensure we have valid prior means
-    if(any(is.na(prior_means)) || length(prior_means) == 0) {
-      warning("Invalid prior means detected for category ", cat, ". Using GMM initialization.")
-      gmm_init <- init_gmm_fast(y, k = n_grp)
-      prior_means <- gmm_init$means
-    }
+    n_components = nrow(modes_grouped)
+    prior_means = modes_grouped$Est_Mode
     
+    message("  After grouping: ", n_components, " components")
     message("  Prior means: ", paste(round(prior_means, 3), collapse = ", "))
     
     # Run MCMC WITH IDs
-    mh_result <- MM_MH(
+    mh_result = MM_MH(
       y = y,
       grp = n_components,
       prior_means = prior_means,
@@ -581,13 +482,13 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      seed = seed
+      seed = 123
     )
     
     message("  Mean acceptance: ", paste(round(mh_result$mean_acceptance, 3), collapse = ", "))
     
     # Create output - IDs are already in mcmc_result from MM_MH
-    output_df <- create_MM_output(
+    output_df = create_MM_output(
       mcmc_result = mh_result,
       y_original = y,
       group_original = NULL,
@@ -595,13 +496,13 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
       max_groups = maxNGROUP
     )
     
-    results[[as.character(cat)]] <- output_df
+    results[[as.character(cat)]] = output_df
     
     # Write to CSV if out_dir provided
     if(!is.null(out_dir)) {
       if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-      filename <- paste0("df_", cat, ".csv")
-      filepath <- file.path(out_dir, filename)
+      filename = paste0("df_", cat, ".csv")
+      filepath = file.path(out_dir, filename)
       write.csv(output_df, filepath, row.names = FALSE, quote = TRUE)
       message("  Written: ", filepath)
     }
@@ -609,7 +510,7 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
   
   # Combine and return results if no out_dir
   if(is.null(out_dir)) {
-    combined_result <- do.call(rbind, results)
+    combined_result = do.call(rbind, results)
     message("Analysis complete. Result has ", nrow(combined_result), " rows.")
     
     return(combined_result)
@@ -619,14 +520,14 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
   }
 }
 
-#' Parallel wrapper around get_PROBCLASS_MH with improved initialization
+#' Parallel wrapper around get_PROBCLASS_MH
 #' 
 #' @param data Input data frame
 #' @param varCLASS Character, category variable name (required)
 #' @param varY Character, value variable name (required)
 #' @param varID Character, ID variable name (required)
 #' @param method Density estimator method
-#' @param mode_method Mode detection method
+#' @param mode_method Mode detection method ("bw", "2d")
 #' @param within Range parameter
 #' @param maxNGROUP Maximum number of groups
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
@@ -634,15 +535,16 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param seed Random seed
+#' @param clustering_params List of parameters for 2D clustering
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
-                          method = "adaptive", mode_method = "adaptive",
+                          method = "dpi", mode_method = "bw",
                           within = 0.03, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15, seed = 123) {
+                          proposal_sd = 0.15,
+                          clustering_params = list(minPts = 5, eps = 0.2, method = "hdbscan")) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -679,7 +581,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
     
-    # Use the updated get_PROBCLASS_MH function
+    # Use get_PROBCLASS_MH function
     result = get_PROBCLASS_MH(
       data = cat_data,
       varCLASS = varCLASS,
@@ -693,7 +595,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      seed = seed
+      clustering_params = clustering_params
     )
     
     return(result)

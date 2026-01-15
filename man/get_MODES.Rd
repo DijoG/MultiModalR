@@ -2,30 +2,18 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_MODES}
 \alias{get_MODES}
-\title{Optimized multimodal detection for MCMC initialization}
+\title{Extract mode statistics from a mode forest}
 \usage{
-get_MODES(
-  y,
-  nmod = NULL,
-  method = "adaptive",
-  within = 0.1,
-  max_components = 5
-)
+get_MODES(y, nmod)
 }
 \arguments{
-\item{y}{vector, input data}
+\item{y}{vector, input data of a distribution}
 
-\item{nmod}{number of modes/components to detect (if NULL, auto-detected)}
-
-\item{method}{detection method ("kde", "gmm", or "adaptive")}
-
-\item{within}{range for grouping close modes (default: 0.1)}
-
-\item{max_components}{maximum components (default: 5)}
+\item{nmod}{numeric, count/number of subpopulations/subgroups}
 }
 \value{
-data frame with estimated modes and group assignments
+data frame with estimated modes
 }
 \description{
-Optimized multimodal detection for MCMC initialization
+Extract mode statistics from a mode forest
 }
