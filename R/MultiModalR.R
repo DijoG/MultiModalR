@@ -28,22 +28,38 @@ check_PACKS <- function() {
   }
 }
 
-#' Obtain the number of groups based on bandwidth selection
+#' Obtain the number of groups based on bandwidth selection with SJ tuning
 #'
 #' @param y vector, input data of a distribution
+#' @param sj_adjust adjustment factor for SJ bandwidth (default: 1.0)
 #' @return data frame with methods and number of groups
 #' @export
-get_NGRP <- function(y) {
+get_NGRP <- function(y, sj_adjust = 1.0) {
+  
+  # Calculate bandwidths
   bwRT = stats::bw.nrd(y)                 # Scott's 1.06
-  bwSJ = stats::bw.SJ(y, method = "dpi")  # Sheather & Jones' direct plug-in method
   bwBCV = stats::bw.bcv(y)                # Biased cross-validation
   
-  nrd_nmod = multimode::nmodes(y, bw = bwRT)
-  sj_nmod = multimode::nmodes(y, bw = bwSJ)
-  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
+  # Sheather & Jones' direct plug-in method with tuning
+  bwSJ_base = stats::bw.SJ(y, method = "dpi")
+  bwSJ_tuned = bwSJ_base * sj_adjust
   
-  return(data.frame(Method = c("nrd", "bcv", "dpi"),
-                    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)))
+  # Ensure reasonable bounds
+  data_range = diff(range(y))
+  min_bw = data_range / 100  # Minimum: 1% of range
+  max_bw = data_range / 3    # Maximum: 33% of range
+  bwSJ_tuned = max(min(bwSJ_tuned, max_bw), min_bw)
+  
+  # Detect modes
+  nrd_nmod = multimode::nmodes(y, bw = bwRT)
+  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
+  sj_nmod = multimode::nmodes(y, bw = bwSJ_tuned)
+  
+  return(data.frame(
+    Method = c("nrd", "bcv", "dpi"),
+    Bandwidth = c(bwRT, bwBCV, bwSJ_tuned),
+    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)
+  ))
 }
 
 #' Extract mode statistics from a mode forest
@@ -240,12 +256,14 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param sj_adjust Adjustment factor for SJ bandwidth (default: 1.0)
 #' @return Data frame or writes CSV files to out_dir
 #' @export
 get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
                              method = "dpi", within = 0.03, maxNGROUP = 5, 
                              out_dir = NULL, n_iter = 1000,
-                             burnin = 500, proposal_sd = 0.15) {
+                             burnin = 500, proposal_sd = 0.15,
+                             sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -275,15 +293,21 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
     ids = cat_data[[varID]]
     
     message("Processing category: ", cat)
+    message("  SJ adjustment factor: ", sj_adjust)
     
-    # Mode detection
-    n_grp_df = get_NGRP(y)
+    # Mode detection WITH SJ TUNING
+    n_grp_df = get_NGRP(y, sj_adjust = sj_adjust)
     n_grp = n_grp_df %>% 
       dplyr::filter(Method == method) %>% 
       dplyr::pull(n_grp)
     n_grp = min(max(n_grp, 3), maxNGROUP)
     
-    message("  Detected ", n_grp, " components")
+    # Get bandwidth used for debugging
+    bandwidth_used = n_grp_df %>% 
+      dplyr::filter(Method == method) %>% 
+      dplyr::pull(Bandwidth)
+    
+    message("  Detected ", n_grp, " components (BW = ", round(bandwidth_used, 4), ")")
     
     # Get mode locations
     modes_df = get_MODES(y, nmod = n_grp)
@@ -355,13 +379,14 @@ get_PROBCLASS_MH <- function(data, varCLASS, varY, varID,
 #' @param n_iter Number of MCMC iterations (default: 1000)
 #' @param burnin Burn-in period (default: 500)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param sj_adjust Adjustment factor for SJ bandwidth (default: 1.0, smaller -> more modes, higher -> fewer modes)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
 fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
                           method = "dpi", within = 1, maxNGROUP = 5, 
                           out_dir = NULL, n_workers = 4,  
                           n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15) {
+                          proposal_sd = 0.15, sj_adjust = 1.0) {
   
   # Validate inputs
   if(!is.data.frame(data)) {
@@ -385,11 +410,8 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
   data_list = split(data, data[[varCLASS]])
   
   message("Processing ", length(categories), " categories in parallel with ", 
-          n_workers, " workers: ", paste(categories, collapse = ", "))
-  
-  if(!is.null(varID)) {
-    message("Including ID column: ", varID)
-  }
+          n_workers, " workers")
+  message("SJ adjustment factor: ", sj_adjust)
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -401,7 +423,7 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name)
     
-    # Use the SAME get_PROBCLASS_MH function
+    # Use get_PROBCLASS_MH with sj_adjust parameter
     result = get_PROBCLASS_MH(
       data = cat_data,
       varCLASS = varCLASS,
@@ -410,16 +432,17 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       method = method,
       within = within,
       maxNGROUP = maxNGROUP,
-      out_dir = out_dir,  # Pass out_dir to each worker
+      out_dir = out_dir,
       n_iter = n_iter,
       burnin = burnin,
-      proposal_sd = proposal_sd
+      proposal_sd = proposal_sd,
+      sj_adjust = sj_adjust
     )
     
     return(result)
     
   }, .options = furrr::furrr_options(
-    packages = "MultiModalR",  # Required package
+    packages = "MultiModalR",
     seed = TRUE
   ), .progress = TRUE)
   
@@ -435,10 +458,6 @@ fuss_PARALLEL <- function(data, varCLASS, varY, varID,
       combined_result = do.call(rbind, result_list)
       message("Parallel analysis complete. Combined result has ", 
               nrow(combined_result), " rows.")
-      
-      if(!is.null(varID)) {
-        message("ID column included in output.")
-      }
       
       return(combined_result)
     } else {

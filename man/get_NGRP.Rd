@@ -2,16 +2,18 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_NGRP}
 \alias{get_NGRP}
-\title{Obtain the number of groups based on bandwidth selection}
+\title{Obtain the number of groups based on bandwidth selection with SJ tuning}
 \usage{
-get_NGRP(y)
+get_NGRP(y, sj_adjust = 1)
 }
 \arguments{
 \item{y}{vector, input data of a distribution}
+
+\item{sj_adjust}{adjustment factor for SJ bandwidth (default: 1.0)}
 }
 \value{
 data frame with methods and number of groups
 }
 \description{
-Obtain the number of groups based on bandwidth selection
+Obtain the number of groups based on bandwidth selection with SJ tuning
 }
