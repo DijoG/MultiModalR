@@ -550,29 +550,71 @@ plot_VALIDATION <- function(csv_dir, observed_df,
   # Match by ID only
   matched = dplyr::inner_join(observed_df, predicted, by = id_col)
   
-  # Calculate overall accuracy
-  matched$correct = matched[[subpop_col]] == matched$Assigned_Group
-  overall_accuracy = round(mean(matched$correct, na.rm = TRUE) * 100, 1)
+  # ========== FIX: Calculate ALIGNED accuracy (handles label switching) ==========
   
-  # Calculate accuracy per Main_Class
-  accuracy_by_class = matched %>%
-    group_by(Main_Class) %>%
-    summarize(
-      accuracy = round(mean(correct, na.rm = TRUE) * 100, 1),
-      n = n(),
-      .groups = 'drop'
+  # For each category, align labels by value order and track correct counts
+  all_correct = c()
+  accuracy_by_class = list()
+  
+  for(category in unique(matched$Main_Class)) {
+    cat_data = matched %>% dplyr::filter(Main_Class == category)
+    
+    # Get unique groups
+    true_groups = sort(unique(cat_data[[subpop_col]]))
+    pred_groups = sort(unique(cat_data$Assigned_Group))
+    
+    if(length(true_groups) != length(pred_groups)) {
+      # If group counts don't match, use raw accuracy
+      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Group
+    } else {
+      # Calculate mean value for each true group
+      true_means = cat_data %>%
+        dplyr::group_by(!!rlang::sym(subpop_col)) %>%
+        dplyr::summarize(mean_val = mean(!!rlang::sym(value_col)), .groups = 'drop') %>%
+        dplyr::arrange(mean_val) %>%
+        dplyr::pull(!!rlang::sym(subpop_col))
+      
+      # Calculate mean value for each predicted group  
+      pred_means = cat_data %>%
+        dplyr::group_by(Assigned_Group) %>%
+        dplyr::summarize(mean_val = mean(y), .groups = 'drop') %>%
+        dplyr::arrange(mean_val) %>%
+        dplyr::pull(Assigned_Group)
+      
+      # Create mapping: align by value order
+      mapping = setNames(true_means, pred_means)
+      
+      # Apply mapping to calculate aligned accuracy
+      cat_data$Assigned_Aligned = mapping[as.character(cat_data$Assigned_Group)]
+      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Aligned
+    }
+    
+    # Store correct/incorrect for overall calculation
+    all_correct = c(all_correct, correct_vector)
+    
+    # Calculate accuracy for this category
+    acc = round(mean(correct_vector, na.rm = TRUE) * 100, 1)
+    
+    accuracy_by_class[[category]] = data.frame(
+      Main_Class = category,
+      accuracy = acc,
+      n = nrow(cat_data)
     )
+  }
   
-  # Create label data for plot
-  label_data = accuracy_by_class %>%
-    mutate(Percent = format(accuracy, nsmall = 1))
+  # Calculate overall accuracy correctly
+  overall_accuracy = round(mean(all_correct, na.rm = TRUE) * 100, 1)
+  
+  # Create label data for plot (using ALIGNED accuracy)
+  label_data = purrr::map_dfr(accuracy_by_class, ~ .x) %>%
+    dplyr::mutate(Percent = format(accuracy, nsmall = 1))
   
   # Create color palette for subgroups
   n_groups = length(unique(predicted$Assigned_Group))
   group_colors = c("firebrick2", "forestgreen", "cyan3", "gold", "purple", "orange")
   group_colors = group_colors[1:min(n_groups, length(group_colors))]
   
-  # Plot validation
+  # Plot validation - EXACT SAME STYLING AS BEFORE
   p = ggplot2::ggplot(predicted, ggplot2::aes(x = y)) +
     ggplot2::geom_density(col = NA, fill = "grey98", adjust = 0.8) +
     ggplot2::geom_jitter(ggplot2::aes(y = 0.05, color = factor(Assigned_Group)), 
