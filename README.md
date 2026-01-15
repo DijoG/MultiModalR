@@ -44,7 +44,7 @@ MultiModalR::fuss_PARALLEL(
   method = "sj-dpi",         # /default
   within = 1,                # /default
   maxNGROUP = 5,             # /default
-  out_dir = ".../output",    # -> optinonal 
+  out_dir = ".../output",    # -> optional 
   n_workers = 3,             # /default
   n_iter = 1000,             # /default
   burnin = 500,              # /default
