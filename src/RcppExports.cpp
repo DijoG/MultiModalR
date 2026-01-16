@@ -27,9 +27,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// MM_MH_dirichlet_cpp
+Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y, const arma::vec& prior_means, int n_iter, int burnin, double proposal_sd, double dirichlet_alpha, int seed);
+RcppExport SEXP _MultiModalR_MM_MH_dirichlet_cpp(SEXP ySEXP, SEXP prior_meansSEXP, SEXP n_iterSEXP, SEXP burninSEXP, SEXP proposal_sdSEXP, SEXP dirichlet_alphaSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type prior_means(prior_meansSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type burnin(burninSEXP);
+    Rcpp::traits::input_parameter< double >::type proposal_sd(proposal_sdSEXP);
+    Rcpp::traits::input_parameter< double >::type dirichlet_alpha(dirichlet_alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(MM_MH_dirichlet_cpp(y, prior_means, n_iter, burnin, proposal_sd, dirichlet_alpha, seed));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MultiModalR_MM_MH_cpp", (DL_FUNC) &_MultiModalR_MM_MH_cpp, 6},
+    {"_MultiModalR_MM_MH_dirichlet_cpp", (DL_FUNC) &_MultiModalR_MM_MH_dirichlet_cpp, 7},
     {NULL, NULL, 0}
 };
 

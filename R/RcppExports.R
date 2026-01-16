@@ -5,3 +5,7 @@ MM_MH_cpp <- function(y, prior_means, n_iter = 1000L, burnin = 500L, proposal_sd
     .Call(`_MultiModalR_MM_MH_cpp`, y, prior_means, n_iter, burnin, proposal_sd, seed)
 }
 
+MM_MH_dirichlet_cpp <- function(y, prior_means, n_iter = 5000L, burnin = 2000L, proposal_sd = 0.15, dirichlet_alpha = 2.0, seed = 123L) {
+    .Call(`_MultiModalR_MM_MH_dirichlet_cpp`, y, prior_means, n_iter, burnin, proposal_sd, dirichlet_alpha, seed)
+}
+

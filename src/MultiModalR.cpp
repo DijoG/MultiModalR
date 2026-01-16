@@ -334,3 +334,303 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
     Rcpp::Named("burnin") = burnin
   );
 }
+
+// ==================== DIRICHELET ====================
+
+// Helper function to sample from Dirichlet distribution
+arma::vec sample_dirichlet(const arma::vec& alpha, std::mt19937& rng) {
+  int K = alpha.n_elem;
+  arma::vec samples(K);
+  double sum_gamma = 0.0;
+  
+  for(int k = 0; k < K; ++k) {
+    std::gamma_distribution<double> gamma_dist(alpha(k), 1.0);
+    samples(k) = gamma_dist(rng);
+    sum_gamma += samples(k);
+  }
+  
+  if(sum_gamma > 0) {
+    samples = samples / sum_gamma;
+  } else {
+    samples.fill(1.0 / K);
+  }
+  
+  return samples;
+}
+
+// Dirichlet-Multinomial MCMC
+// [[Rcpp::export]]
+Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y, 
+                               const arma::vec& prior_means,
+                               int n_iter = 5000, 
+                               int burnin = 2000,
+                               double proposal_sd = 0.15,
+                               double dirichlet_alpha = 2.0,
+                               int seed = 123) {
+  
+  int n = y.n_elem;
+  int K = prior_means.n_elem;
+  int n_samples = n_iter - burnin;
+  
+  // Random number generator
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<double> unif(0.0, 1.0);
+  std::normal_distribution<double> norm(0.0, 1.0);
+  
+  // Initialize storage - SAME FORMAT AS ORIGINAL
+  arma::mat z_probs(n, K, arma::fill::zeros);
+  arma::cube param_samples(K, 3, n_samples, arma::fill::zeros);
+  
+  // Initialize parameters
+  arma::vec means = prior_means;
+  arma::vec sds = arma::ones(K) * arma::stddev(y) * 0.5;
+  arma::vec weights = arma::ones(K) / K;
+  arma::vec dirichlet_prior = arma::ones(K) * dirichlet_alpha;
+  
+  // Initialize assignments (balanced)
+  arma::ivec z_current(n);
+  int min_per_comp = std::max(1, n / K);
+  int idx = 0;
+  
+  for(int k = 0; k < K; ++k) {
+    for(int j = 0; j < min_per_comp; ++j) {
+      if(idx < n) {
+        z_current(idx) = k;
+        idx++;
+      }
+    }
+  }
+  
+  std::uniform_int_distribution<int> runif_int(0, K-1);
+  for(; idx < n; ++idx) {
+    z_current(idx) = runif_int(rng);
+  }
+  
+  // Shuffle
+  for(int i = n - 1; i > 0; --i) {
+    int j = std::rand() % (i + 1);
+    std::swap(z_current(i), z_current(j));
+  }
+  
+  // MCMC loop
+  int sample_idx = 0;
+  
+  for(int iter = 0; iter < n_iter; ++iter) {
+    
+    // Update means (same as original)
+    for(int k = 0; k < K; ++k) {
+      double mean_current = means(k);
+      double mean_proposed = mean_current + proposal_sd * norm(rng);
+      
+      double log_ratio = 0.0;
+      for(int i = 0; i < n; ++i) {
+        if(z_current(i) == k) {
+          double diff_prop = y(i) - mean_proposed;
+          double diff_curr = y(i) - mean_current;
+          log_ratio += (diff_curr * diff_curr - diff_prop * diff_prop) / (2.0 * sds(k) * sds(k));
+        }
+      }
+      
+      // Prior (normal)
+      log_ratio += (pow(mean_current - prior_means(k), 2) - 
+        pow(mean_proposed - prior_means(k), 2)) / 2.0;
+      
+      if(log(unif(rng)) < log_ratio) {
+        means(k) = mean_proposed;
+      }
+    }
+    
+    // Update weights using Dirichlet-Multinomial conjugacy
+    arma::vec counts(K, arma::fill::zeros);
+    for(int i = 0; i < n; ++i) {
+      counts(z_current(i)) += 1.0;
+    }
+    
+    arma::vec dirichlet_posterior = dirichlet_prior + counts;
+    weights = sample_dirichlet(dirichlet_posterior, rng);
+    
+    // Update assignments (collapsed Gibbs - Dirichlet marginalized out)
+    for(int i = 0; i < n; ++i) {
+      arma::vec log_probs(K);
+      double max_log = -1e100;
+      
+      for(int k = 0; k < K; ++k) {
+        // Counts excluding current observation
+        int count_excl = 0;
+        for(int j = 0; j < n; ++j) {
+          if(j != i && z_current(j) == k) {
+            count_excl++;
+          }
+        }
+        
+        // Chinese Restaurant Process: P(z_i = k | z_{-i}) ∝ (N_{k,-i} + α_k)
+        double log_prior = log(count_excl + dirichlet_prior(k));
+        
+        // Gaussian likelihood
+        double z_score = (y(i) - means(k)) / sds(k);
+        double log_likelihood = -0.5 * z_score * z_score - log(sds(k));
+        
+        log_probs(k) = log_prior + log_likelihood;
+        if(log_probs(k) > max_log) max_log = log_probs(k);
+      }
+      
+      // Convert to probabilities and sample
+      double sum_exp = 0.0;
+      for(int k = 0; k < K; ++k) {
+        sum_exp += exp(log_probs(k) - max_log);
+      }
+      
+      double u = unif(rng) * sum_exp;
+      double cum_prob = 0.0;
+      int new_z = 0;
+      
+      for(int k = 0; k < K; ++k) {
+        cum_prob += exp(log_probs(k) - max_log);
+        if(u <= cum_prob) {
+          new_z = k;
+          break;
+        }
+      }
+      
+      z_current(i) = new_z;
+      
+      // Store probabilities after burnin
+      if(iter >= burnin) {
+        for(int k = 0; k < K; ++k) {
+          z_probs(i, k) += exp(log_probs(k) - max_log) / sum_exp;
+        }
+      }
+    }
+    
+    // Update standard deviations
+    for(int k = 0; k < K; ++k) {
+      double sum_sq = 0.0;
+      int count_k = 0;
+      
+      for(int i = 0; i < n; ++i) {
+        if(z_current(i) == k) {
+          double diff = y(i) - means(k);
+          sum_sq += diff * diff;
+          count_k++;
+        }
+      }
+      
+      if(count_k > 2) {
+        // Inverse Gamma
+        double post_shape = 3.0 + count_k / 2.0;
+        double post_rate = 1.0 + sum_sq / 2.0;
+        
+        std::gamma_distribution<double> gamma(post_shape, 1.0/post_rate);
+        sds(k) = sqrt(1.0 / gamma(rng));
+        sds(k) = std::max(sds(k), 0.1);
+      }
+    }
+    
+    // Store samples after burnin
+    if(iter >= burnin) {
+      for(int k = 0; k < K; ++k) {
+        param_samples(k, 0, sample_idx) = means(k);
+        param_samples(k, 1, sample_idx) = sds(k);
+        param_samples(k, 2, sample_idx) = weights(k);
+      }
+      sample_idx++;
+    }
+  }
+  
+  // Normalize probabilities
+  z_probs = z_probs / n_samples;
+  
+  // Calculate assignments (SAME FORMAT AS ORIGINAL)
+  arma::ivec assigned_group(n);
+  arma::vec assignment_confidence(n);
+  
+  for(int i = 0; i < n; ++i) {
+    int best_comp = 0;
+    double best_prob = z_probs(i, 0);
+    
+    for(int k = 1; k < K; ++k) {
+      if(z_probs(i, k) > best_prob) {
+        best_prob = z_probs(i, k);
+        best_comp = k;
+      }
+    }
+    
+    assigned_group(i) = best_comp + 1;
+    assignment_confidence(i) = best_prob;
+  }
+  
+  // Calculate group statistics (SAME FORMAT AS ORIGINAL)
+  arma::vec min_assigned(n), max_assigned(n), mean_assigned(n), mode_assigned(n);
+  
+  for(int k = 0; k < K; ++k) {
+    std::vector<double> group_values;
+    
+    for(int i = 0; i < n; ++i) {
+      if(assigned_group(i) == (k + 1)) {
+        group_values.push_back(y(i));
+      }
+    }
+    
+    if(!group_values.empty()) {
+      double min_val = *std::min_element(group_values.begin(), group_values.end());
+      double max_val = *std::max_element(group_values.begin(), group_values.end());
+      
+      double sum_val = 0.0;
+      for(double val : group_values) sum_val += val;
+      double mean_val = sum_val / group_values.size();
+      
+      // Simple mode estimation
+      std::map<int, int> hist;
+      int n_bins = std::min(20, static_cast<int>(group_values.size() / 5));
+      if(n_bins < 3) n_bins = 3;
+      
+      double bin_width = (max_val - min_val) / n_bins;
+      if(bin_width < 1e-10) bin_width = 0.1;
+      
+      for(double val : group_values) {
+        int bin = static_cast<int>((val - min_val) / bin_width);
+        if(bin >= 0 && bin < n_bins) hist[bin]++;
+      }
+      
+      int mode_bin = 0;
+      int max_count = 0;
+      for(const auto& pair : hist) {
+        if(pair.second > max_count) {
+          max_count = pair.second;
+          mode_bin = pair.first;
+        }
+      }
+      
+      double mode_val = min_val + (mode_bin + 0.5) * bin_width;
+      
+      for(int i = 0; i < n; ++i) {
+        if(assigned_group(i) == (k + 1)) {
+          min_assigned(i) = min_val;
+          max_assigned(i) = max_val;
+          mean_assigned(i) = mean_val;
+          mode_assigned(i) = mode_val;
+        }
+      }
+    }
+  }
+  
+  // Return SAME STRUCTURE as original MM_MH_cpp
+  return Rcpp::List::create(
+    Rcpp::Named("y") = y,
+    Rcpp::Named("z_probs") = z_probs,
+    Rcpp::Named("assigned_group") = assigned_group,
+    Rcpp::Named("min_assigned") = min_assigned,
+    Rcpp::Named("max_assigned") = max_assigned,
+    Rcpp::Named("mean_assigned") = mean_assigned,
+    Rcpp::Named("mode_assigned") = mode_assigned,
+    Rcpp::Named("assignment_confidence") = assignment_confidence,
+    Rcpp::Named("posterior_means") = arma::mean(param_samples.slice(0), 1),
+    Rcpp::Named("posterior_sds") = arma::mean(param_samples.slice(1), 1),
+    Rcpp::Named("posterior_weights") = arma::mean(param_samples.slice(2), 1),
+    Rcpp::Named("mean_acceptance") = arma::ones(K) * 0.5, // Placeholder
+    Rcpp::Named("n_components") = K,
+    Rcpp::Named("n_iter") = n_iter,
+    Rcpp::Named("burnin") = burnin,
+    Rcpp::Named("method") = "dirichlet" // NEW: indicate method used
+  );
+}

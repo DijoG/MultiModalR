@@ -155,6 +155,7 @@ MM_MH <- function(y, grp, prior_means = NULL, ids,
   
   # Store the IDs in the result
   result$ids = ids
+  result$method = "metropolis-hastings"
   
   return(result)
 }
@@ -642,4 +643,358 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
   
   return(p)
+}
+
+# ============ NEW FUNCTIONS ============
+
+#' Dirichlet MCMC (identical interface to MM_MH)
+#' 
+#' @param y Numeric vector of data
+#' @param grp Number of mixture components
+#' @param prior_means Prior means for components
+#' @param ids Vector of IDs for validation
+#' @param n_iter Number of MCMC iterations
+#' @param burnin Burn-in period
+#' @param proposal_sd Proposal standard deviation
+#' @param dirichlet_alpha Dirichlet concentration parameter
+#' @param seed Random seed
+#' @return List with MCMC results (SAME FORMAT as MM_MH)
+#' @export
+MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
+                            n_iter = 5000, burnin = 2000,
+                            proposal_sd = 0.15, dirichlet_alpha = 2.0,
+                            seed = NULL) {
+  
+  # Same validation as MM_MH
+  if(missing(ids)) {
+    stop("'ids' argument is required for validation.")
+  }
+  
+  if(is.null(ids)) {
+    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
+  }
+  
+  if(length(ids) != length(y)) {
+    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
+  }
+  
+  if(is.null(seed)) {
+    seed = sample.int(.Machine$integer.max, 1)
+  }
+  
+  if(is.null(prior_means)) {
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  if(length(prior_means) != grp) {
+    warning("prior_means length doesn't match grp. Using equally spaced means.")
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  # Call Dirichlet C++ function
+  result = MM_MH_dirichlet_cpp(
+    y = as.numeric(y),
+    prior_means = as.numeric(prior_means),
+    n_iter = as.integer(n_iter),
+    burnin = as.integer(burnin),
+    proposal_sd = as.numeric(proposal_sd),
+    dirichlet_alpha = as.numeric(dirichlet_alpha),
+    seed = as.integer(seed)
+  )
+  
+  # Ensure compatibility with create_MM_output
+  if(is.null(result$mean_acceptance)) {
+    result$mean_acceptance = rep(0.5, result$n_components)
+  }
+  
+  # Store IDs 
+  result$ids = ids
+  result$method = "dirichlet"  
+  
+  return(result)
+}
+
+#' Enhanced mode detection 
+#' 
+#' @param y Numeric vector
+#' @param adjust Bandwidth adjustment factor
+#' @param threshold Relative threshold for significant peaks
+#' @return List with mode estimates from multiple methods
+#' @export
+get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
+  # Your improved mode detection code
+  dSJ = density(y, bw = "SJ", adjust = adjust)
+  dNRD = density(y, bw = "nrd", adjust = adjust)
+  dBCV = density(y, bw = "bcv", adjust = adjust)
+  dUCV = density(y, bw = "ucv")
+  
+  # Find peaks for each method
+  find_peaks <- function(dens) {
+    peak_idx = which(diff(sign(diff(dens$y))) < 0) + 1
+    peaks = dens$x[peak_idx]
+    heights = dens$y[peak_idx]
+    list(peaks = peaks, heights = heights)
+  }
+  
+  peaks_SJ = find_peaks(dSJ)
+  peaks_NRD = find_peaks(dNRD)
+  peaks_BCV = find_peaks(dBCV)
+  peaks_UCV = find_peaks(dUCV)
+  
+  # Filter peaks above threshold
+  filter_peaks <- function(peaks_list, dens_mean, threshold) {
+    significant = peaks_list$heights > dens_mean * threshold
+    peaks_list$peaks[significant]
+  }
+  
+  sig_peakSJ = filter_peaks(peaks_SJ, mean(dSJ$y), threshold)
+  sig_peakNRD = filter_peaks(peaks_NRD, mean(dNRD$y), threshold)
+  sig_peakBCV = filter_peaks(peaks_BCV, mean(dBCV$y), threshold)
+  sig_peakUCV = filter_peaks(peaks_UCV, mean(dUCV$y), threshold)
+  
+  # Return as named list
+  return(list(
+    "sj-dpi" = data.frame(Est_Mode = sig_peakSJ, Group = 1:length(sig_peakSJ)),
+    "nrd" = data.frame(Est_Mode = sig_peakNRD, Group = 1:length(sig_peakNRD)),
+    "bcv" = data.frame(Est_Mode = sig_peakBCV, Group = 1:length(sig_peakBCV)),
+    "ucv" = data.frame(Est_Mode = sig_peakUCV, Group = 1:length(sig_peakUCV)),
+    bandwidths = c("sj-dpi" = dSJ$bw, "nrd" = dNRD$bw, "bcv" = dBCV$bw, "ucv" = dUCV$bw)
+  ))
+}
+
+#' Parallel Dirichlet wrapper - works with fuss_PARALLEL
+#' 
+#' @param ... All parameters from fuss_PARALLEL
+#' @param mcmc_method "dirichlet" or "metropolis" (default)
+#' @param dirichlet_alpha Dirichlet concentration parameter
+#' @return Same as fuss_PARALLEL
+#' @export
+fuss_PARALLEL_dirichlet <- function(..., 
+                                    mcmc_method = "dirichlet",
+                                    dirichlet_alpha = 2.0) {
+  
+  # Capture all arguments
+  args <- list(...)
+  
+  # Override the get_PROBCLASS_MH call inside fuss_PARALLEL
+  # by creating a custom version on the fly
+  
+  # Define a custom processor that uses Dirichlet
+  process_category_dirichlet <- function(cat_data, varCLASS, varY, varID,
+                                         method, within, maxNGROUP, out_dir,
+                                         n_iter, burnin, proposal_sd, sj_adjust,
+                                         mcmc_method, dirichlet_alpha) {
+    
+    cat_name = as.character(unique(cat_data[[varCLASS]])[1])
+    message("Processing category: ", cat_name, " (", mcmc_method, ")")
+    
+    y = cat_data[[varY]]
+    ids = cat_data[[varID]]
+    
+    # Determine effective sj_adjust value
+    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    
+    # Mode detection with enhanced method
+    mode_result = get_MODES_enhanced(y, adjust = effective_sj_adjust, threshold = 1.0)
+    
+    if(method %in% names(mode_result)) {
+      modes_df = mode_result[[method]]
+    } else {
+      modes_df = mode_result[["sj-dpi"]]
+    }
+    
+    # Group modes
+    modes_grouped = group_MODES(modes_df, within = within)
+    n_components = nrow(modes_grouped)
+    prior_means = modes_grouped$Est_Mode
+    
+    message("  Detected ", n_components, " components")
+    
+    # Choose MCMC method
+    if(mcmc_method == "dirichlet") {
+      mh_result = MM_MH_dirichlet(
+        y = y,
+        grp = n_components,
+        prior_means = prior_means,
+        ids = ids,
+        n_iter = n_iter,
+        burnin = burnin,
+        proposal_sd = proposal_sd,
+        dirichlet_alpha = dirichlet_alpha,
+        seed = 123
+      )
+    } else {
+      mh_result = MM_MH(
+        y = y,
+        grp = n_components,
+        prior_means = prior_means,
+        ids = ids,
+        n_iter = n_iter,
+        burnin = burnin,
+        proposal_sd = proposal_sd,
+        seed = 123
+      )
+    }
+    
+    # Create output
+    output_df = create_MM_output(
+      mcmc_result = mh_result,
+      y_original = y,
+      group_original = NULL,
+      main_class = as.character(cat_name),
+      max_groups = maxNGROUP
+    )
+    
+    # Add method info
+    attr(output_df, "mcmc_method") = mcmc_method
+    
+    # Write to CSV if out_dir provided
+    if(!is.null(out_dir)) {
+      if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+      filename = paste0("df_", cat_name, "_", mcmc_method, ".csv")
+      filepath = file.path(out_dir, filename)
+      write.csv(output_df, filepath, row.names = FALSE, quote = TRUE)
+      message("  Written: ", filepath)
+      return(NULL)
+    }
+    
+    return(output_df)
+  }
+  
+  # Extract parameters from args
+  data = args$data
+  varCLASS = args$varCLASS
+  varY = args$varY
+  varID = args$varID
+  method = ifelse(is.null(args$method), "sj-dpi", args$method)
+  within = ifelse(is.null(args$within), 1, args$within)
+  maxNGROUP = ifelse(is.null(args$maxNGROUP), 5, args$maxNGROUP)
+  out_dir = args$out_dir
+  n_workers = ifelse(is.null(args$n_workers), 3, args$n_workers)
+  n_iter = ifelse(is.null(args$n_iter), 1000, args$n_iter)
+  burnin = ifelse(is.null(args$burnin), 500, args$burnin)
+  proposal_sd = ifelse(is.null(args$proposal_sd), 0.15, args$proposal_sd)
+  sj_adjust = ifelse(is.null(args$sj_adjust), 0.5, args$sj_adjust)
+  
+  # Split data by category
+  categories = unique(data[[varCLASS]])
+  data_list = split(data, data[[varCLASS]])
+  
+  message("Processing ", length(categories), " categories in parallel with ", 
+          n_workers, " workers (MCMC: ", mcmc_method, ")")
+  
+  # Setup parallel processing
+  future::plan(future::multisession, workers = n_workers)
+  
+  # Process each category in parallel
+  result_list = furrr::future_map(data_list, function(cat_data) {
+    
+    process_category_dirichlet(
+      cat_data = cat_data,
+      varCLASS = varCLASS,
+      varY = varY,
+      varID = varID,
+      method = method,
+      within = within,
+      maxNGROUP = maxNGROUP,
+      out_dir = out_dir,
+      n_iter = n_iter,
+      burnin = burnin,
+      proposal_sd = proposal_sd,
+      sj_adjust = sj_adjust,
+      mcmc_method = mcmc_method,
+      dirichlet_alpha = dirichlet_alpha
+    )
+    
+  }, .options = furrr::furrr_options(
+    packages = "MultiModalR",
+    seed = TRUE
+  ), .progress = TRUE)
+  
+  # Reset to sequential
+  future::plan(future::sequential)
+  
+  # If out_dir is NULL, combine and return results
+  if(is.null(out_dir)) {
+    result_list = result_list[!sapply(result_list, is.null)]
+    
+    if(length(result_list) > 0) {
+      combined_result = do.call(rbind, result_list)
+      message("Parallel analysis complete. Combined result has ", 
+              nrow(combined_result), " rows.")
+      
+      # Add method attribute
+      attr(combined_result, "mcmc_method") = mcmc_method
+      attr(combined_result, "mode_method") = method
+      
+      return(combined_result)
+    }
+  }
+  
+  message("Analysis complete.")
+  return(invisible(NULL))
+}
+
+#' Quick wrapper for Dirichlet parallel processing
+#' 
+#' @param ... Same parameters as fuss_PARALLEL
+#' @return Same output format
+#' @export
+fuss_DIRICHLET <- function(...) {
+  fuss_PARALLEL_dirichlet(..., mcmc_method = "dirichlet")
+}
+
+#' Compare both MCMC methods in parallel
+#' 
+#' @param data Input data frame
+#' @param varCLASS Category variable name
+#' @param varY Value variable name
+#' @param varID ID variable name
+#' @param n_workers Number of parallel workers
+#' @param ... Additional parameters
+#' @return List with both results
+#' @export
+compare_parallel_methods <- function(data, varCLASS, varY, varID,
+                                     n_workers = 3, ...) {
+  
+  message("Running Metropolis (original) method...")
+  result_metropolis <- fuss_PARALLEL(
+    data = data,
+    varCLASS = varCLASS,
+    varY = varY,
+    varID = varID,
+    n_workers = n_workers,
+    ...
+  )
+  
+  message("\nRunning Dirichlet (enhanced) method...")
+  result_dirichlet <- fuss_PARALLEL_dirichlet(
+    data = data,
+    varCLASS = varCLASS,
+    varY = varY,
+    varID = varID,
+    n_workers = n_workers,
+    mcmc_method = "dirichlet",
+    ...
+  )
+  
+  # Compare if both returned data frames
+  if(!is.null(result_metropolis) && !is.null(result_dirichlet)) {
+    
+    # Compare assignment confidence
+    if("assignment_confidence" %in% names(result_metropolis)) {
+      conf_metropolis = mean(result_metropolis$assignment_confidence, na.rm = TRUE)
+      conf_dirichlet = mean(result_dirichlet$assignment_confidence, na.rm = TRUE)
+      
+      message("\nComparison Results:")
+      message("  Metropolis mean confidence: ", round(conf_metropolis, 4))
+      message("  Dirichlet mean confidence: ", round(conf_dirichlet, 4))
+      message("  Improvement: ", round((conf_dirichlet - conf_metropolis) * 100, 2), "%")
+    }
+  }
+  
+  return(list(
+    metropolis = result_metropolis,
+    dirichlet = result_dirichlet
+  ))
 }
