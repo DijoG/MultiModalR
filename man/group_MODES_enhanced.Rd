@@ -2,13 +2,12 @@
 % Please edit documentation in R/MultiModalR.R
 \name{group_MODES_enhanced}
 \alias{group_MODES_enhanced}
-\title{Group/merge modes if they are within a given range
-Uses density heights when available for better grouping}
+\title{Density height-aware mode grouping}
 \usage{
 group_MODES_enhanced(df, within = 0.1)
 }
 \arguments{
-\item{df}{data frame containing 'Est_Mode' and optionally 'Density_Height' columns}
+\item{df}{data frame containing 'Est_Mode' and 'Density_Height' columns}
 
 \item{within}{numeric, range for grouping modes (default: 0.1)}
 }
@@ -16,6 +15,5 @@ group_MODES_enhanced(df, within = 0.1)
 data frame with grouped modes
 }
 \description{
-Group/merge modes if they are within a given range
-Uses density heights when available for better grouping
+Density height-aware mode grouping
 }

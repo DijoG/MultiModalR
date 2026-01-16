@@ -714,20 +714,19 @@ MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
   return(result)
 }
 
-#' Enhanced mode detection with density heights
+#' Density height-aware mode detection
 #' 
 #' Returns mode estimates from FOUR different bandwidth methods.
 #' Each method may detect different numbers and locations of modes.
 #' 
 #' @param y Numeric vector
-#' @param adjust Bandwidth adjustment factor (affects SJ, nrd, bcv methods)
+#' @param adjust Bandwidth adjustment factor (affects "SJ", "nrd", "bcv" methods)
 #' @param threshold Relative threshold for significant peaks
 #' @return List with mode estimates from multiple methods including density heights
 #' @export
 get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
   
   # Estimate densities with different bandwidths
-  # Note: ucv doesn't accept adjust parameter
   dSJ = density(y, bw = "SJ", adjust = adjust)
   dNRD = density(y, bw = "nrd", adjust = adjust)
   dBCV = density(y, bw = "bcv", adjust = adjust)
@@ -735,6 +734,7 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
   
   # Function to find peaks with heights
   find_peaks_with_heights <- function(dens, method_name) {
+    
     # Find local maxima
     y_diff1 = diff(dens$y)
     y_diff2 = diff(sign(y_diff1))
@@ -780,7 +780,6 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
     "ucv" = dUCV$bw
   )
   
-  # Return as named list - NO CONSENSUS!
   return(list(
     "sj-dpi" = peaks_SJ,
     "nrd" = peaks_NRD,
@@ -793,10 +792,9 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
   ))
 }
 
-#' Group/merge modes if they are within a given range
-#' Uses density heights when available for better grouping
+#' Density height-aware mode grouping
 #'
-#' @param df data frame containing 'Est_Mode' and optionally 'Density_Height' columns
+#' @param df data frame containing 'Est_Mode' and 'Density_Height' columns
 #' @param within numeric, range for grouping modes (default: 0.1)
 #' @return data frame with grouped modes
 #' @export
@@ -856,7 +854,7 @@ group_MODES_enhanced <- function(df, within = 0.1) {
       dplyr::group_by(group) %>%
       dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop") %>%
       dplyr::arrange(Est_Mode) %>%
-      dplyr::mutate(group = 1:dplyr::n())  # Renumber
+      dplyr::mutate(group = 1:dplyr::n())  
     
   } else {
     # Original simple grouping

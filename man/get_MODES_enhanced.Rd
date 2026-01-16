@@ -2,14 +2,14 @@
 % Please edit documentation in R/MultiModalR.R
 \name{get_MODES_enhanced}
 \alias{get_MODES_enhanced}
-\title{Enhanced mode detection with density heights}
+\title{Density height-aware mode detection}
 \usage{
 get_MODES_enhanced(y, adjust = 1, threshold = 1)
 }
 \arguments{
 \item{y}{Numeric vector}
 
-\item{adjust}{Bandwidth adjustment factor (affects SJ, nrd, bcv methods)}
+\item{adjust}{Bandwidth adjustment factor (affects "SJ", "nrd", "bcv" methods)}
 
 \item{threshold}{Relative threshold for significant peaks}
 }
