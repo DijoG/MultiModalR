@@ -714,52 +714,163 @@ MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
   return(result)
 }
 
-#' Enhanced mode detection 
+#' Enhanced mode detection with density heights
+#' 
+#' Returns mode estimates from FOUR different bandwidth methods.
+#' Each method may detect different numbers and locations of modes.
 #' 
 #' @param y Numeric vector
-#' @param adjust Bandwidth adjustment factor
+#' @param adjust Bandwidth adjustment factor (affects SJ, nrd, bcv methods)
 #' @param threshold Relative threshold for significant peaks
-#' @return List with mode estimates from multiple methods
+#' @return List with mode estimates from multiple methods including density heights
 #' @export
 get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
-  # Your improved mode detection code
+  
+  # Estimate densities with different bandwidths
+  # Note: ucv doesn't accept adjust parameter
   dSJ = density(y, bw = "SJ", adjust = adjust)
   dNRD = density(y, bw = "nrd", adjust = adjust)
   dBCV = density(y, bw = "bcv", adjust = adjust)
-  dUCV = density(y, bw = "ucv", adjust = adjust)
+  dUCV = density(y, bw = "ucv")
   
-  # Find peaks for each method
-  find_peaks <- function(dens) {
-    peak_idx = which(diff(sign(diff(dens$y))) < 0) + 1
+  # Function to find peaks with heights
+  find_peaks_with_heights <- function(dens, method_name) {
+    # Find local maxima
+    y_diff1 = diff(dens$y)
+    y_diff2 = diff(sign(y_diff1))
+    peak_idx = which(y_diff2 < 0) + 1
+    
     peaks = dens$x[peak_idx]
     heights = dens$y[peak_idx]
-    list(peaks = peaks, heights = heights)
+    
+    # Filter peaks above threshold
+    significant = heights > mean(dens$y) * threshold
+    sig_peaks = peaks[significant]
+    sig_heights = heights[significant]
+    
+    # Return as data frame with heights
+    if(length(sig_peaks) > 0) {
+      data.frame(
+        Est_Mode = sig_peaks,
+        Density_Height = sig_heights,
+        Group = 1:length(sig_peaks),
+        Method = method_name
+      )
+    } else {
+      data.frame(
+        Est_Mode = numeric(0),
+        Density_Height = numeric(0),
+        Group = integer(0),
+        Method = character(0)
+      )
+    }
   }
   
-  peaks_SJ = find_peaks(dSJ)
-  peaks_NRD = find_peaks(dNRD)
-  peaks_BCV = find_peaks(dBCV)
-  peaks_UCV = find_peaks(dUCV)
+  # Get peaks for each method
+  peaks_SJ = find_peaks_with_heights(dSJ, "sj-dpi")
+  peaks_NRD = find_peaks_with_heights(dNRD, "nrd")
+  peaks_BCV = find_peaks_with_heights(dBCV, "bcv")
+  peaks_UCV = find_peaks_with_heights(dUCV, "ucv")
   
-  # Filter peaks above threshold
-  filter_peaks <- function(peaks_list, dens_mean, threshold) {
-    significant = peaks_list$heights > dens_mean * threshold
-    peaks_list$peaks[significant]
-  }
+  # Store bandwidths
+  bandwidths = c(
+    "sj-dpi" = dSJ$bw,
+    "nrd" = dNRD$bw,
+    "bcv" = dBCV$bw,
+    "ucv" = dUCV$bw
+  )
   
-  sig_peakSJ = filter_peaks(peaks_SJ, mean(dSJ$y), threshold)
-  sig_peakNRD = filter_peaks(peaks_NRD, mean(dNRD$y), threshold)
-  sig_peakBCV = filter_peaks(peaks_BCV, mean(dBCV$y), threshold)
-  sig_peakUCV = filter_peaks(peaks_UCV, mean(dUCV$y), threshold)
-  
-  # Return as named list
+  # Return as named list - NO CONSENSUS!
   return(list(
-    "sj-dpi" = data.frame(Est_Mode = sig_peakSJ, Group = 1:length(sig_peakSJ)),
-    "nrd" = data.frame(Est_Mode = sig_peakNRD, Group = 1:length(sig_peakNRD)),
-    "bcv" = data.frame(Est_Mode = sig_peakBCV, Group = 1:length(sig_peakBCV)),
-    "ucv" = data.frame(Est_Mode = sig_peakUCV, Group = 1:length(sig_peakUCV)),
-    bandwidths = c("sj-dpi" = dSJ$bw, "nrd" = dNRD$bw, "bcv" = dBCV$bw, "ucv" = dUCV$bw)
+    "sj-dpi" = peaks_SJ,
+    "nrd" = peaks_NRD,
+    "bcv" = peaks_BCV,
+    "ucv" = peaks_UCV,
+    bandwidths = bandwidths,
+    threshold_used = threshold,
+    adjust_used = adjust,
+    n_obs = length(y)
   ))
+}
+
+#' Group/merge modes if they are within a given range
+#' Uses density heights when available for better grouping
+#'
+#' @param df data frame containing 'Est_Mode' and optionally 'Density_Height' columns
+#' @param within numeric, range for grouping modes (default: 0.1)
+#' @return data frame with grouped modes
+#' @export
+group_MODES_enhanced <- function(df, within = 0.1) {
+  
+  # Check if we have data
+  if(nrow(df) == 0) {
+    return(data.frame(
+      group = integer(0),
+      Est_Mode = numeric(0)
+    ))
+  }
+  
+  # Check if density heights are available
+  if("Density_Height" %in% names(df)) {
+    
+    # Enhanced grouping: sort by height (descending)
+    modes_df = df %>%
+      dplyr::arrange(dplyr::desc(Density_Height)) %>%
+      dplyr::mutate(
+        processed = FALSE,
+        group = NA_integer_
+      )
+    
+    group_counter = 1
+    n_modes = nrow(modes_df)
+    
+    # Process modes from highest to lowest density
+    for(i in 1:n_modes) {
+      if(!modes_df$processed[i]) {
+        current_mode = modes_df$Est_Mode[i]
+        
+        # Start a new group with this mode
+        modes_df$group[i] = group_counter
+        modes_df$processed[i] = TRUE
+        
+        # Find all unprocessed modes within range
+        if(i < n_modes) {
+          for(j in (i+1):n_modes) {
+            if(j <= n_modes && !modes_df$processed[j]) {
+              if(abs(modes_df$Est_Mode[j] - current_mode) <= within) {
+                # Add to same group
+                modes_df$group[j] = group_counter
+                modes_df$processed[j] = TRUE
+              }
+            }
+          }
+        }
+        
+        group_counter = group_counter + 1
+      }
+    }
+    
+    # Calculate group means
+    result = modes_df %>%
+      dplyr::filter(!is.na(group)) %>%
+      dplyr::group_by(group) %>%
+      dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop") %>%
+      dplyr::arrange(Est_Mode) %>%
+      dplyr::mutate(group = 1:dplyr::n())  # Renumber
+    
+  } else {
+    # Original simple grouping
+    df = df %>%
+      dplyr::arrange(Est_Mode) %>%
+      dplyr::mutate(group = cumsum(c(1, diff(Est_Mode) > within)))
+    
+    result = df %>%
+      dplyr::group_by(group) %>%
+      dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop") %>%
+      dplyr::arrange(Est_Mode)
+  }
+  
+  return(result)
 }
 
 #' Parallel Dirichlet/Metropolis wrapper 
@@ -792,11 +903,8 @@ fuss_PARALLEL_MAIN <- function(...,
     y = cat_data[[varY]]
     ids = cat_data[[varID]]
     
-    # Mode detection with enhanced method - FIXED VERSION:
+    # Mode detection with enhanced method 
     mode_result = get_MODES_enhanced(y, adjust = sj_adjust, threshold = 1.0)
-    
-    # Debug: print available methods
-    # message("  Available methods: ", paste(names(mode_result), collapse = ", "))
     
     if(method %in% names(mode_result)) {
       modes_df = mode_result[[method]]
@@ -815,7 +923,7 @@ fuss_PARALLEL_MAIN <- function(...,
     }
     
     # Group modes
-    modes_grouped = group_MODES(modes_df, within = within)
+    modes_grouped = group_MODES_enhanced(modes_df, within = within)
     n_components = nrow(modes_grouped)
     prior_means = modes_grouped$Est_Mode
     
@@ -872,13 +980,11 @@ fuss_PARALLEL_MAIN <- function(...,
     return(output_df)
   }
   
-  # Extract parameters from args (with proper defaults)
+  # Extract parameters from args 
   data = args$data
   varCLASS = args$varCLASS
   varY = args$varY
   varID = args$varID
-  # Use the method parameter passed to fuss_PARALLEL_MAIN, not from args
-  # method = ifelse(is.null(args$method), "sj-dpi", args$method)  # Don't do this!
   within = ifelse(is.null(args$within), 1, args$within)
   maxNGROUP = ifelse(is.null(args$maxNGROUP), 5, args$maxNGROUP)
   out_dir = args$out_dir
@@ -886,7 +992,6 @@ fuss_PARALLEL_MAIN <- function(...,
   n_iter = ifelse(is.null(args$n_iter), 1000, args$n_iter)
   burnin = ifelse(is.null(args$burnin), 500, args$burnin)
   proposal_sd = ifelse(is.null(args$proposal_sd), 0.15, args$proposal_sd)
-  # Use the sj_adjust parameter passed to fuss_PARALLEL_MAIN, not from args
   
   # Split data by category
   categories = unique(data[[varCLASS]])
@@ -907,14 +1012,14 @@ fuss_PARALLEL_MAIN <- function(...,
       varCLASS = varCLASS,
       varY = varY,
       varID = varID,
-      method = method,          # Use the method parameter
+      method = method,          
       within = within,
       maxNGROUP = maxNGROUP,
       out_dir = out_dir,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      sj_adjust = sj_adjust,    # Use the sj_adjust parameter
+      sj_adjust = sj_adjust,    
       mcmc_method = mcmc_method,
       dirichlet_alpha = dirichlet_alpha
     )
