@@ -765,29 +765,26 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
 #' Parallel Dirichlet/Metropolis wrapper 
 #' 
 #' @param ... All parameters from fuss_PARALLEL
-#' @param mcmc_method "dirichlet" or "metropolis" (default: "dirichelet)
+#' @param mcmc_method "dirichlet" or "metropolis" (default: "dirichlet")
 #' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
-#' @param method Density estimator method ("sj-dpi", "bcv", "ucv, "nrd") (default: "sj-dpi")
+#' @param method Density estimator method ("sj-dpi", "bcv", "ucv", "nrd") (default: "sj-dpi")
 #' @param sj_adjust Adjustment factor for ALL density estimator methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
 #' @return Same as fuss_PARALLEL
 #' @export
 fuss_PARALLEL_MAIN <- function(..., 
                                mcmc_method = "dirichlet",
                                dirichlet_alpha = 2.0,
-                               method = "sj_dpi",
+                               method = "sj-dpi",           
                                sj_adjust = 0.5) {
   
   # Capture all arguments
   args = list(...)
   
-  # Override the get_PROBCLASS_MH call inside fuss_PARALLEL
-  # by creating a custom version on the fly
-  
   # Define a custom processor that uses Dirichlet
   process_category_dirichlet = function(cat_data, varCLASS, varY, varID,
-                                         method, within, maxNGROUP, out_dir,
-                                         n_iter, burnin, proposal_sd, sj_adjust,
-                                         mcmc_method, dirichlet_alpha) {
+                                        method, within, maxNGROUP, out_dir,
+                                        n_iter, burnin, proposal_sd, sj_adjust,
+                                        mcmc_method, dirichlet_alpha) {
     
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name, " (", mcmc_method, ")")
@@ -795,16 +792,26 @@ fuss_PARALLEL_MAIN <- function(...,
     y = cat_data[[varY]]
     ids = cat_data[[varID]]
     
-    # Determine effective adjust value
-    effective_adjust = sj_adjust
+    # Mode detection with enhanced method - FIXED VERSION:
+    mode_result = get_MODES_enhanced(y, adjust = sj_adjust, threshold = 1.0)
     
-    # Mode detection with enhanced method
-    mode_result = get_MODES_enhanced(y, adjust = effective_adjust, threshold = 1.0)
+    # Debug: print available methods
+    # message("  Available methods: ", paste(names(mode_result), collapse = ", "))
     
     if(method %in% names(mode_result)) {
       modes_df = mode_result[[method]]
     } else {
-      modes_df = mode_result[["sj-dpi"]]
+      # Try common variations
+      if(method == "sj_dpi" && "sj-dpi" %in% names(mode_result)) {
+        modes_df = mode_result[["sj-dpi"]]
+        warning("Method 'sj_dpi' not found. Using 'sj-dpi' instead.")
+      } else if(method == "sj-dpi" && "sj_dpi" %in% names(mode_result)) {
+        modes_df = mode_result[["sj_dpi"]]
+        warning("Method 'sj-dpi' not found. Using 'sj_dpi' instead.")
+      } else {
+        modes_df = mode_result[["sj-dpi"]]
+        warning("Method '", method, "' not found. Using 'sj-dpi'.")
+      }
     }
     
     # Group modes
@@ -865,12 +872,13 @@ fuss_PARALLEL_MAIN <- function(...,
     return(output_df)
   }
   
-  # Extract parameters from args
+  # Extract parameters from args (with proper defaults)
   data = args$data
   varCLASS = args$varCLASS
   varY = args$varY
   varID = args$varID
-  method = ifelse(is.null(args$method), "sj-dpi", args$method)
+  # Use the method parameter passed to fuss_PARALLEL_MAIN, not from args
+  # method = ifelse(is.null(args$method), "sj-dpi", args$method)  # Don't do this!
   within = ifelse(is.null(args$within), 1, args$within)
   maxNGROUP = ifelse(is.null(args$maxNGROUP), 5, args$maxNGROUP)
   out_dir = args$out_dir
@@ -878,14 +886,15 @@ fuss_PARALLEL_MAIN <- function(...,
   n_iter = ifelse(is.null(args$n_iter), 1000, args$n_iter)
   burnin = ifelse(is.null(args$burnin), 500, args$burnin)
   proposal_sd = ifelse(is.null(args$proposal_sd), 0.15, args$proposal_sd)
-  sj_adjust = ifelse(is.null(args$sj_adjust), 0.5, args$sj_adjust)
+  # Use the sj_adjust parameter passed to fuss_PARALLEL_MAIN, not from args
   
   # Split data by category
   categories = unique(data[[varCLASS]])
   data_list = split(data, data[[varCLASS]])
   
   message("Processing ", length(categories), " categories in parallel with ", 
-          n_workers, " workers (MCMC: ", mcmc_method, ")")
+          n_workers, " workers (MCMC: ", mcmc_method, ", Mode: ", method, 
+          ", sj_adjust: ", sj_adjust, ")")
   
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
@@ -898,14 +907,14 @@ fuss_PARALLEL_MAIN <- function(...,
       varCLASS = varCLASS,
       varY = varY,
       varID = varID,
-      method = method,
+      method = method,          # Use the method parameter
       within = within,
       maxNGROUP = maxNGROUP,
       out_dir = out_dir,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      sj_adjust = sj_adjust,
+      sj_adjust = sj_adjust,    # Use the sj_adjust parameter
       mcmc_method = mcmc_method,
       dirichlet_alpha = dirichlet_alpha
     )
@@ -930,6 +939,7 @@ fuss_PARALLEL_MAIN <- function(...,
       # Add method attribute
       attr(combined_result, "mcmc_method") = mcmc_method
       attr(combined_result, "mode_method") = method
+      attr(combined_result, "sj_adjust") = sj_adjust
       
       return(combined_result)
     }

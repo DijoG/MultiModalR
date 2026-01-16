@@ -8,18 +8,18 @@ fuss_PARALLEL_MAIN(
   ...,
   mcmc_method = "dirichlet",
   dirichlet_alpha = 2,
-  method = "sj_dpi",
+  method = "sj-dpi",
   sj_adjust = 0.5
 )
 }
 \arguments{
 \item{...}{All parameters from fuss_PARALLEL}
 
-\item{mcmc_method}{"dirichlet" or "metropolis" (default: "dirichelet)}
+\item{mcmc_method}{"dirichlet" or "metropolis" (default: "dirichlet")}
 
 \item{dirichlet_alpha}{Dirichlet concentration parameter (default: 2.0)}
 
-\item{method}{Density estimator method ("sj-dpi", "bcv", "ucv, "nrd") (default: "sj-dpi")}
+\item{method}{Density estimator method ("sj-dpi", "bcv", "ucv", "nrd") (default: "sj-dpi")}
 
 \item{sj_adjust}{Adjustment factor for ALL density estimator methods (default: 0.5, smaller -> more modes, higher -> fewer modes)}
 }
