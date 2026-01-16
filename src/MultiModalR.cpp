@@ -336,7 +336,9 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
   );
 }
 
+// ---------------------------------------------------
 // ==================== DIRICHLET ====================
+// ---------------------------------------------------
 
 // Helper function to sample from Dirichlet distribution
 arma::vec sample_dirichlet(const arma::vec& alpha, std::mt19937& rng) {
