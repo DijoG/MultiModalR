@@ -726,7 +726,7 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
   dSJ = density(y, bw = "SJ", adjust = adjust)
   dNRD = density(y, bw = "nrd", adjust = adjust)
   dBCV = density(y, bw = "bcv", adjust = adjust)
-  dUCV = density(y, bw = "ucv")
+  dUCV = density(y, bw = "ucv", adjust = adjust)
   
   # Find peaks for each method
   find_peaks <- function(dens) {
@@ -762,25 +762,29 @@ get_MODES_enhanced <- function(y, adjust = 1, threshold = 1.0) {
   ))
 }
 
-#' Parallel Dirichlet wrapper - works with fuss_PARALLEL
+#' Parallel Dirichlet/Metropolis wrapper 
 #' 
 #' @param ... All parameters from fuss_PARALLEL
-#' @param mcmc_method "dirichlet" or "metropolis" (default)
-#' @param dirichlet_alpha Dirichlet concentration parameter
+#' @param mcmc_method "dirichlet" or "metropolis" (default: "dirichelet)
+#' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
+#' @param method Density estimator method ("sj-dpi", "bcv", "ucv, "nrd") (default: "sj-dpi")
+#' @param sj_adjust Adjustment factor for ALL density estimator methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
 #' @return Same as fuss_PARALLEL
 #' @export
-fuss_PARALLEL_dirichlet <- function(..., 
-                                    mcmc_method = "dirichlet",
-                                    dirichlet_alpha = 2.0) {
+fuss_PARALLEL_MAIN <- function(..., 
+                               mcmc_method = "dirichlet",
+                               dirichlet_alpha = 2.0,
+                               method = "sj_dpi",
+                               sj_adjust = 0.5) {
   
   # Capture all arguments
-  args <- list(...)
+  args = list(...)
   
   # Override the get_PROBCLASS_MH call inside fuss_PARALLEL
   # by creating a custom version on the fly
   
   # Define a custom processor that uses Dirichlet
-  process_category_dirichlet <- function(cat_data, varCLASS, varY, varID,
+  process_category_dirichlet = function(cat_data, varCLASS, varY, varID,
                                          method, within, maxNGROUP, out_dir,
                                          n_iter, burnin, proposal_sd, sj_adjust,
                                          mcmc_method, dirichlet_alpha) {
@@ -791,11 +795,11 @@ fuss_PARALLEL_dirichlet <- function(...,
     y = cat_data[[varY]]
     ids = cat_data[[varID]]
     
-    # Determine effective sj_adjust value
-    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
+    # Determine effective adjust value
+    effective_adjust = sj_adjust
     
     # Mode detection with enhanced method
-    mode_result = get_MODES_enhanced(y, adjust = effective_sj_adjust, threshold = 1.0)
+    mode_result = get_MODES_enhanced(y, adjust = effective_adjust, threshold = 1.0)
     
     if(method %in% names(mode_result)) {
       modes_df = mode_result[[method]]
@@ -933,68 +937,4 @@ fuss_PARALLEL_dirichlet <- function(...,
   
   message("Analysis complete.")
   return(invisible(NULL))
-}
-
-#' Quick wrapper for Dirichlet parallel processing
-#' 
-#' @param ... Same parameters as fuss_PARALLEL
-#' @return Same output format
-#' @export
-fuss_DIRICHLET <- function(...) {
-  fuss_PARALLEL_dirichlet(..., mcmc_method = "dirichlet")
-}
-
-#' Compare both MCMC methods in parallel
-#' 
-#' @param data Input data frame
-#' @param varCLASS Category variable name
-#' @param varY Value variable name
-#' @param varID ID variable name
-#' @param n_workers Number of parallel workers
-#' @param ... Additional parameters
-#' @return List with both results
-#' @export
-compare_parallel_methods <- function(data, varCLASS, varY, varID,
-                                     n_workers = 3, ...) {
-  
-  message("Running Metropolis (original) method...")
-  result_metropolis <- fuss_PARALLEL(
-    data = data,
-    varCLASS = varCLASS,
-    varY = varY,
-    varID = varID,
-    n_workers = n_workers,
-    ...
-  )
-  
-  message("\nRunning Dirichlet (enhanced) method...")
-  result_dirichlet <- fuss_PARALLEL_dirichlet(
-    data = data,
-    varCLASS = varCLASS,
-    varY = varY,
-    varID = varID,
-    n_workers = n_workers,
-    mcmc_method = "dirichlet",
-    ...
-  )
-  
-  # Compare if both returned data frames
-  if(!is.null(result_metropolis) && !is.null(result_dirichlet)) {
-    
-    # Compare assignment confidence
-    if("assignment_confidence" %in% names(result_metropolis)) {
-      conf_metropolis = mean(result_metropolis$assignment_confidence, na.rm = TRUE)
-      conf_dirichlet = mean(result_dirichlet$assignment_confidence, na.rm = TRUE)
-      
-      message("\nComparison Results:")
-      message("  Metropolis mean confidence: ", round(conf_metropolis, 4))
-      message("  Dirichlet mean confidence: ", round(conf_dirichlet, 4))
-      message("  Improvement: ", round((conf_dirichlet - conf_metropolis) * 100, 2), "%")
-    }
-  }
-  
-  return(list(
-    metropolis = result_metropolis,
-    dirichlet = result_dirichlet
-  ))
 }
