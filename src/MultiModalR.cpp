@@ -331,11 +331,12 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
     Rcpp::Named("mean_acceptance") = mean_acceptance,
     Rcpp::Named("n_components") = n_components,
     Rcpp::Named("n_iter") = n_iter,
-    Rcpp::Named("burnin") = burnin
+    Rcpp::Named("burnin") = burnin,
+    Rcpp::Named("method") = "metropolitan"
   );
 }
 
-// ==================== DIRICHELET ====================
+// ==================== DIRICHLET ====================
 
 // Helper function to sample from Dirichlet distribution
 arma::vec sample_dirichlet(const arma::vec& alpha, std::mt19937& rng) {
@@ -377,7 +378,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
   std::uniform_real_distribution<double> unif(0.0, 1.0);
   std::normal_distribution<double> norm(0.0, 1.0);
   
-  // Initialize storage - SAME FORMAT AS ORIGINAL
+  // Initialize storage 
   arma::mat z_probs(n, K, arma::fill::zeros);
   arma::cube param_samples(K, 3, n_samples, arma::fill::zeros);
   
@@ -417,7 +418,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
   
   for(int iter = 0; iter < n_iter; ++iter) {
     
-    // Update means (same as original)
+    // Update means 
     for(int k = 0; k < K; ++k) {
       double mean_current = means(k);
       double mean_proposed = mean_current + proposal_sd * norm(rng);
@@ -449,7 +450,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
     arma::vec dirichlet_posterior = dirichlet_prior + counts;
     weights = sample_dirichlet(dirichlet_posterior, rng);
     
-    // Update assignments (collapsed Gibbs - Dirichlet marginalized out)
+    // Update assignments (Dirichlet marginalization)
     for(int i = 0; i < n; ++i) {
       arma::vec log_probs(K);
       double max_log = -1e100;
@@ -540,7 +541,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
   // Normalize probabilities
   z_probs = z_probs / n_samples;
   
-  // Calculate assignments (SAME FORMAT AS ORIGINAL)
+  // Calculate assignments 
   arma::ivec assigned_group(n);
   arma::vec assignment_confidence(n);
   
@@ -559,7 +560,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
     assignment_confidence(i) = best_prob;
   }
   
-  // Calculate group statistics (SAME FORMAT AS ORIGINAL)
+  // Calculate group statistics 
   arma::vec min_assigned(n), max_assigned(n), mean_assigned(n), mode_assigned(n);
   
   for(int k = 0; k < K; ++k) {
@@ -614,7 +615,7 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
     }
   }
   
-  // Return SAME STRUCTURE as original MM_MH_cpp
+  // Return SAME STRUCTURE as MM_MH_cpp
   return Rcpp::List::create(
     Rcpp::Named("y") = y,
     Rcpp::Named("z_probs") = z_probs,
@@ -627,10 +628,10 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
     Rcpp::Named("posterior_means") = arma::mean(param_samples.slice(0), 1),
     Rcpp::Named("posterior_sds") = arma::mean(param_samples.slice(1), 1),
     Rcpp::Named("posterior_weights") = arma::mean(param_samples.slice(2), 1),
-    Rcpp::Named("mean_acceptance") = arma::ones(K) * 0.5, // Placeholder
+    Rcpp::Named("mean_acceptance") = arma::ones(K) * 0.5, 
     Rcpp::Named("n_components") = K,
     Rcpp::Named("n_iter") = n_iter,
     Rcpp::Named("burnin") = burnin,
-    Rcpp::Named("method") = "dirichlet" // NEW: indicate method used
+    Rcpp::Named("method") = "dirichlet" 
   );
 }
