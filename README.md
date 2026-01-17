@@ -151,7 +151,7 @@ MultiModalR::fuss_PARALLEL_mcmc(
   n_workers = cores
 )
 tictoc::toc()
-# Processing time: 4.17 sec (3 cores) ~ 91.4% overall accuracy
+# Processing time: 5.19 sec (3 cores) ~ 91.4% overall accuracy
 
 # - OR -->
 

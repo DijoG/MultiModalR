@@ -332,7 +332,7 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
     Rcpp::Named("n_components") = n_components,
     Rcpp::Named("n_iter") = n_iter,
     Rcpp::Named("burnin") = burnin,
-    Rcpp::Named("method") = "metropolitan"
+    Rcpp::Named("method") = "metropolis"
   );
 }
 
