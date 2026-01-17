@@ -13,7 +13,7 @@ create_MM_output(
 )
 }
 \arguments{
-\item{mcmc_result}{Output from MM_MH() - MUST contain ids in mcmc_result$ids if needed}
+\item{mcmc_result}{Output from MM_MH() or MM_MH_dirichlet()}
 
 \item{y_original}{Original y values (if different from mcmc_result$y)}
 
@@ -24,7 +24,7 @@ create_MM_output(
 \item{max_groups}{Maximum number of groups for output columns}
 }
 \value{
-Data frame in MINLAM CSV format
+Data frame in CSV format
 }
 \description{
 Converts MCMC results to exact CSV format

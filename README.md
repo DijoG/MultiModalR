@@ -1,19 +1,25 @@
-# MultiModalR 🏔️ <img src="https://latex.codecogs.com/svg.latex?\color{green}w_1\mathcal{N}(\mu_1,\sigma_1^2)+w_2\mathcal{N}(\mu_2,\sigma_2^2)+w_3\mathcal{N}(\mu_3,\sigma_3^2)" height="30" align="center">
+# MultiModalR 🏔️ <img src="https://latex.codecogs.com/svg.latex?\color{white}w_1\mathcal{N}(\mu_1,\sigma_1^2)+w_2\mathcal{N}(\mu_2,\sigma_2^2)+w_3\mathcal{N}(\mu_3,\sigma_3^2)" height="30" align="center">
 
-[![R](https://img.shields.io/badge/R-≥4.0-green?style=for-the-badge&logo=r)](https://www.r-project.org/)
-[![C++](https://img.shields.io/badge/C++-RcppArmadillo-green?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
+[![R](https://img.shields.io/badge/R-≥4.0-blue?style=for-the-badge&logo=r)](https://www.r-project.org/)
+[![C++](https://img.shields.io/badge/C++-RcppArmadillo-blue?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
 
 
-**MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using a fast C++ implementation of Metropolis-Hastings-within-partial-Gibbs sampling.
+**MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using two advanced Markov Chain Monte Carlo (MCMC) algorithms implemented in optimized C++:
+
+1. Metropolis-Hastings-within-partial-Gibbs - Fast, proven algorithm
+
+2. Dirichlet-Multinomial (collapsed Gibbs) - Theoretically robust with proper uncertainty quantification
 
 ## Features
 
-- **Fast MCMC**: Speed-optimized Metropolis-Hastings-within-partial-Gibbs implementation
-- **Subpopulation Detection**: Automatic detection of multimodal components
+- **Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial (robustness)
+- **Enhanced Mode Detection**: Height-aware peak detection with four bandwidth methods (SJ, nrd, bcv, ucv)
 - **Bayesian Probability Assignment**: Soft assignment with probability estimates
-- **Parallel Processing**: Built-in support for multi-core computation
+- **Subpopulation Detection**: Automatic detection of multimodal components
+- **Parallel Processing**: Built-in multi-core computation for large datasets
 - **Validation Tools**: Built-in plotting and validation functions
 - **Flexible Input**: Works with various categorical data structures
+- **Optimized C++ Core**: Blazing fast MCMC sampling with RcppArmadillo
 
 ## Installation
 
@@ -36,7 +42,7 @@ remotes::install_github("DijoG/MultiModalR")
 library(MultiModalR)
 
 # Prepare data and run analysis
-MultiModalR::fuss_PARALLEL(
+MultiModalR::fuss_PARALLEL_mcmc(
   data = df,                 # -> requied
   varCLASS = "Category",     # -> requied
   varY = "Value",            # -> requied
@@ -46,10 +52,12 @@ MultiModalR::fuss_PARALLEL(
   maxNGROUP = 5,             # /default
   out_dir = ".../output",    # -> optional 
   n_workers = 3,             # /default
-  n_iter = 1000,             # /default
-  burnin = 500,              # /default
-  proposal_sd = .15          # /default
-  sj_adjust = .5             # /default
+  n_iter = NULL,             # /default
+  burnin = NULL,             # /default
+  proposal_sd = .15,         # /default
+  sj_adjust = .5,            # /default
+  mcmc_method = "dirichlet", # /default
+  dirichlet_alpha = 2.0      # /default
 )
 ```
 ## Detailed Example
@@ -126,7 +134,6 @@ ggplot(df, aes(x = Value, fill = Subpopulation)) +
 ```
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_002.png" width="550">
 
-
 ### Parallel Processing Setup 
 ```r
 # Configure parallel processing
@@ -134,8 +141,8 @@ cores <- 3
 ```
 ### Running Analysis
 ```r
-# Analysis with probability output
-MultiModalR::fuss_PARALLEL(
+# Dirichlet MCMC
+MultiModalR::fuss_PARALLEL_mcmc(
   data = df,
   varCLASS = "Category",
   varY = "Value",
@@ -144,7 +151,22 @@ MultiModalR::fuss_PARALLEL(
   n_workers = cores
 )
 tictoc::toc()
-# Processing time: 8.33 sec (3 cores)
+# Processing time: 4.17 sec (3 cores) ~ 91.4% overall accuracy
+
+# - OR -->
+
+# Metropolis-Hastings-within-partial-Gibbs 
+MultiModalR::fuss_PARALLEL_mcmc(
+  data = df,
+  varCLASS = "Category",
+  varY = "Value",
+  varID = "ID",
+  out_dir = "D:/MultiModalR/test",  
+  n_workers = cores,
+  mcmc_method = "metropolis"
+)
+tictoc::toc()
+# Processing time: 3.18 sec (3 cores) ~ 92% overall accuracy
 ```
 ### Output 
 

@@ -28,692 +28,6 @@ check_PACKS <- function() {
   }
 }
 
-#' Obtain the number of groups based on bandwidth selection with SJ tuning
-#'
-#' @param y vector, input data of a distribution
-#' @param sj_adjust adjustment factor for sj-dpi bandwidth (default: 1.0)
-#' @return data frame with methods and number of groups
-#' @export
-get_NGRP <- function(y, sj_adjust = 1.0) {
-  
-  # Calculate bandwidths
-  bwRT = stats::bw.nrd(y)                 # Scott's 1.06
-  bwBCV = stats::bw.bcv(y)                # Biased cross-validation
-  
-  # Sheather & Jones' direct plug-in method with tuning
-  bwSJ_base = stats::bw.SJ(y, method = "dpi")
-  bwSJ_tuned = bwSJ_base * sj_adjust
-  
-  # Ensure reasonable bounds
-  data_range = diff(range(y))
-  min_bw = data_range / 100  # Minimum: 1% of range
-  max_bw = data_range / 3    # Maximum: 33% of range
-  bwSJ_tuned = max(min(bwSJ_tuned, max_bw), min_bw)
-  
-  # Detect modes
-  nrd_nmod = multimode::nmodes(y, bw = bwRT)
-  bcv_nmod = multimode::nmodes(y, bw = bwBCV)
-  sj_nmod = multimode::nmodes(y, bw = bwSJ_tuned)
-  
-  return(data.frame(
-    Method = c("nrd", "bcv", "sj-dpi"),
-    Bandwidth = c(bwRT, bwBCV, bwSJ_tuned),
-    n_grp = c(nrd_nmod, bcv_nmod, sj_nmod)
-  ))
-}
-
-#' Extract mode statistics from a mode forest
-#'
-#' @param y vector, input data of a distribution
-#' @param nmod numeric, count/number of subpopulations/subgroups  
-#' @return data frame with estimated modes
-#' @export
-get_MODES <- function(y, nmod) {
-  mm = multimode::locmodes(y, mod0 = nmod)
-  modes = mm$locations[seq(1, length(mm$locations), by = 2)]
-  mode_df = data.frame(Est_Mode = modes,
-                       Group = 1:length(modes))
-  return(mode_df)
-}
-
-#' Group/merge modes if they are within a given range
-#'
-#' @param df data frame containing samples of a distribution in its 'Est_Mode' variable
-#' @param within numeric, range for grouping modes (default: 0.1)
-#' @return data frame with grouped modes
-#' @export
-group_MODES <- function(df, within = 0.1) {
-  df = df %>%
-    dplyr::arrange(Est_Mode) %>%
-    dplyr::mutate(group = cumsum(c(1, diff(Est_Mode) > within)))
-  
-  df %>%
-    dplyr::group_by(group) %>%
-    dplyr::summarise(Est_Mode = mean(Est_Mode), .groups = "drop") %>%
-    dplyr::arrange(Est_Mode)
-}
-
-#' Fast MCMC for mixture models (C++ implementation)
-#' 
-#' @param y Numeric vector of data
-#' @param grp Number of mixture components
-#' @param prior_means Prior means for components (optional)
-#' @param ids Vector of IDs for validation (required)
-#' @param n_iter Number of MCMC iterations (default: 1000)
-#' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param seed Random seed
-#' @return List with MCMC results
-#' @export
-MM_MH <- function(y, grp, prior_means = NULL, ids,
-                  n_iter = 1000, burnin = 500,
-                  proposal_sd = 0.15, seed = NULL) {
-  
-  # Validate IDs - they are required
-  if(missing(ids)) {
-    stop("'ids' argument is required for validation.")
-  }
-  
-  if(is.null(ids)) {
-    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
-  }
-  
-  if(length(ids) != length(y)) {
-    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
-  }
-  
-  if(any(is.na(ids))) {
-    warning("NA values found in IDs. These will be preserved but may cause issues in validation.")
-  }
-  
-  if(any(duplicated(ids))) {
-    warning("Duplicate IDs found. This may cause issues in validation.")
-  }
-  
-  if(is.null(seed)) {
-    seed = sample.int(.Machine$integer.max, 1)
-  }
-  
-  if(is.null(prior_means)) {
-    prior_means = seq(min(y), max(y), length.out = grp)
-  }
-  
-  # Ensure prior_means matches grp
-  if(length(prior_means) != grp) {
-    warning("prior_means length doesn't match grp. Using equally spaced means.")
-    prior_means = seq(min(y), max(y), length.out = grp)
-  }
-  
-  result = MM_MH_cpp(
-    y = as.numeric(y),
-    prior_means = as.numeric(prior_means),
-    n_iter = as.integer(n_iter),
-    burnin = as.integer(burnin),
-    proposal_sd = as.numeric(proposal_sd),
-    seed = as.integer(seed)
-  )
-  
-  # Store the IDs in the result
-  result$ids = ids
-  result$method = "metropolis-hastings"
-  
-  return(result)
-}
-
-#' Create output data frame
-#' 
-#' Converts MCMC results to exact CSV format
-#' 
-#' @param mcmc_result Output from MM_MH() - MUST contain ids in mcmc_result$ids if needed
-#' @param y_original Original y values (if different from mcmc_result$y)
-#' @param group_original Original group assignments (optional)
-#' @param main_class Category/class name
-#' @param max_groups Maximum number of groups for output columns
-#' @return Data frame in MINLAM CSV format
-#' @export
-create_MM_output <- function(mcmc_result, y_original = NULL, 
-                             group_original = NULL, 
-                             main_class = "", max_groups = 5) {
-  
-  n = length(mcmc_result$y)
-  n_components = mcmc_result$n_components
-  
-  # Get IDs from mcmc_result (should have been added by MM_MH if provided)
-  ids = mcmc_result$ids
-  
-  # Check ID length if IDs exist
-  if(!is.null(ids) && length(ids) != n) {
-    warning("ID length in mcmc_result (", length(ids), ") doesn't match data length (", n, "). IDs will be omitted.")
-    ids = NULL
-  }
-  
-  # Use original y if provided
-  if(!is.null(y_original)) {
-    if(length(y_original) != n) {
-      warning("y_original length doesn't match. Using MCMC y values.")
-      y_values = mcmc_result$y
-    } else {
-      y_values = y_original
-    }
-  } else {
-    y_values = mcmc_result$y
-  }
-  
-  # Create the data frame with or without ID
-  if(!is.null(ids)) {
-    df = data.frame(
-      ID = ids,
-      y = y_values,
-      stringsAsFactors = FALSE
-    )
-  } else {
-    df = data.frame(
-      y = y_values,
-      stringsAsFactors = FALSE
-    )
-  }
-  
-  # Add original group if provided
-  if(!is.null(group_original)) {
-    if(length(group_original) == n) {
-      df$Group = group_original
-    } else {
-      warning("Length of group_original doesn't match data. Skipping.")
-    }
-  }
-  
-  # Add probability columns for actual components
-  for(k in 1:n_components) {
-    df[[paste0("Group_", k)]] = mcmc_result$z_probs[, k]
-  }
-  
-  # Add NA columns for missing groups (up to max_groups)
-  for(k in (n_components + 1):max_groups) {
-    df[[paste0("Group_", k)]] = NA_real_
-  }
-  
-  # Add assignment columns
-  df$Assigned_Group = mcmc_result$assigned_group
-  df$Min_Assigned = mcmc_result$min_assigned
-  df$Max_Assigned = mcmc_result$max_assigned
-  df$Mean_Assigned = mcmc_result$mean_assigned
-  df$Mode_Assigned = mcmc_result$mode_assigned
-  
-  # Ensure Main_Class is character (not factor or logical)
-  df$Main_Class = as.character(main_class)
-  
-  return(df)
-}
-
-#' Core function for mixture model MCMC with ID support
-#' 
-#' @param data Input data frame
-#' @param varCLASS Character, category variable name (required)
-#' @param varY Character, value variable name (required)
-#' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("sj-dpi", "bcv", "nrd")
-#' @param within Range parameter for mode grouping (default: 0.1)
-#' @param maxNGROUP Maximum number of groups
-#' @param out_dir Output directory for CSV files (if NULL, returns data frame)
-#' @param n_iter Number of MCMC iterations (default: 1000)
-#' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for sj-dpi bandwidth detector (default: 1.0)
-#' @return Data frame or writes CSV files to out_dir
-#' @export
-get_PROBCLASS_MH <- function(data, varCLASS, varY, varID, 
-                             method = "sj-dpi", within = 0.1, maxNGROUP = 5, 
-                             out_dir = NULL, n_iter = 1000,
-                             burnin = 500, proposal_sd = 0.15,
-                             sj_adjust = 1.0) {
-  
-  # Validate inputs
-  if(!is.data.frame(data)) {
-    stop("data must be a data frame")
-  }
-  
-  if(!varCLASS %in% names(data)) {
-    stop("varCLASS '", varCLASS, "' not found in data")
-  }
-  
-  if(!varY %in% names(data)) {
-    stop("varY '", varY, "' not found in data")
-  }
-  
-  if(!varID %in% names(data)) {
-    stop("varID '", varID, "' not found in data")
-  }
-  
-  # Warn if sj_adjust is used with non-sj-dpi method
-  if(method != "sj-dpi" && sj_adjust != 1.0) {
-    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
-            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
-            "  Using sj_adjust = 1.0 for method = '", method, "'.")
-  }
-  
-  categories = unique(data[[varCLASS]])
-  results = list()
-  
-  for(cat in categories) {
-    cat_data = data[data[[varCLASS]] == cat, ]
-    y = cat_data[[varY]]
-    
-    # Extract IDs
-    ids = cat_data[[varID]]
-    
-    message("Processing category: ", cat)
-    
-    # Determine effective sj_adjust value
-    # Only use sj_adjust for method = "sj-dpi", otherwise use 1.0
-    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
-    
-    if(method == "sj-dpi") {
-      message("  Using SJ-dpi with adjustment: ", sj_adjust)
-    } else {
-      message("  Using method: ", method, " (sj_adjust ignored)")
-    }
-    
-    # Mode detection WITH SJ TUNING
-    n_grp_df = get_NGRP(y, sj_adjust = effective_sj_adjust)
-    n_grp = n_grp_df %>% 
-      dplyr::filter(Method == method) %>% 
-      dplyr::pull(n_grp)
-    n_grp = min(max(n_grp, 2), maxNGROUP)
-    
-    # Get bandwidth used for debugging
-    bandwidth_used = n_grp_df %>% 
-      dplyr::filter(Method == method) %>% 
-      dplyr::pull(Bandwidth)
-    
-    message("  Detected ", n_grp, " components (BW = ", round(bandwidth_used, 4), ")")
-    
-    # Get mode locations
-    modes_df = get_MODES(y, nmod = n_grp)
-    modes_grouped = group_MODES(modes_df, within = within)
-    
-    n_components = nrow(modes_grouped)
-    prior_means = modes_grouped$Est_Mode
-    
-    message("  After grouping: ", n_components, " components")
-    
-    # Run MCMC WITH IDs
-    mh_result = MM_MH(
-      y = y,
-      grp = n_components,
-      prior_means = prior_means,
-      ids = ids,  
-      n_iter = n_iter,
-      burnin = burnin,
-      proposal_sd = proposal_sd,
-      seed = 123
-    )
-    
-    message("  Mean acceptance: ", paste(round(mh_result$mean_acceptance, 3), collapse = ", "))
-    
-    # Create output - IDs are already in mcmc_result from MM_MH
-    output_df = create_MM_output(
-      mcmc_result = mh_result,
-      y_original = y,
-      group_original = NULL,
-      main_class = as.character(cat),
-      max_groups = maxNGROUP
-    )
-    
-    results[[as.character(cat)]] = output_df
-    
-    # Write to CSV if out_dir provided
-    if(!is.null(out_dir)) {
-      if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-      filename = paste0("df_", cat, ".csv")
-      filepath = file.path(out_dir, filename)
-      write.csv(output_df, filepath, row.names = FALSE, quote = TRUE)
-      message("  Written: ", filepath)
-    }
-  }
-  
-  # Combine and return results if no out_dir
-  if(is.null(out_dir)) {
-    combined_result = do.call(rbind, results)
-    message("Analysis complete. Result has ", nrow(combined_result), " rows.")
-    
-    return(combined_result)
-  } else {
-    message("Results written to: ", out_dir)
-    return(invisible(NULL))
-  }
-}
-
-#' Parallel wrapper around get_PROBCLASS_MH
-#' 
-#' @param data Input data frame
-#' @param varCLASS Character, category variable name (required)
-#' @param varY Character, value variable name (required)
-#' @param varID Character, ID variable name (required)
-#' @param method Density estimator method ("sj-dpi", "bcv", "nrd") (default: "sj-dpi")
-#' @param within Range parameter for grouping modes (default: 1)
-#' @param maxNGROUP Maximum number of groups (default: 5)
-#' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
-#' @param n_workers Number of parallel workers (default: 3)
-#' @param n_iter Number of MCMC iterations (default: 1000)
-#' @param burnin Burn-in period (default: 500)
-#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for sj-dpi bandwidth (default: 0.5, smaller -> more modes, higher -> fewer modes)
-#' @return Data frame (if out_dir is NULL) or writes CSV files
-#' @export
-fuss_PARALLEL <- function(data, varCLASS, varY, varID, 
-                          method = "sj-dpi", within = 1, maxNGROUP = 5, 
-                          out_dir = NULL, n_workers = 3,  
-                          n_iter = 1000, burnin = 500,
-                          proposal_sd = 0.15, sj_adjust = 0.5) {
-  
-  # Validate inputs
-  if(!is.data.frame(data)) {
-    stop("data must be a data frame")
-  }
-  
-  if(!varCLASS %in% names(data)) {
-    stop("varCLASS '", varCLASS, "' not found in data")
-  }
-  
-  if(!varY %in% names(data)) {
-    stop("varY '", varY, "' not found in data")
-  }
-  
-  if(!varID %in% names(data)) {
-    stop("varID '", varID, "' not found in data")
-  }
-  
-  # Split data by category
-  categories = unique(data[[varCLASS]])
-  data_list = split(data, data[[varCLASS]])
-  
-  message("Processing ", length(categories), " categories in parallel with ", 
-          n_workers, " workers")
-  
-  # Warn if sj_adjust is used with non-sj-dpi method
-  if(method != "sj-dpi" && sj_adjust != 1.0) {
-    warning("sj_adjust = ", sj_adjust, " is IGNORED for method = '", method, "'.\n",
-            "  sj_adjust only affects 'sj-dpi' (Sheather-Jones) method.\n",
-            "  Using sj_adjust = 1.0 for method = '", method, "'.")
-  }
-  
-  # Setup parallel processing
-  future::plan(future::multisession, workers = n_workers)
-  
-  # Process each category in parallel
-  result_list = furrr::future_map(data_list, function(cat_data) {
-    
-    # Get category name
-    cat_name = as.character(unique(cat_data[[varCLASS]])[1])
-    message("Processing category: ", cat_name)
-    
-    # Determine effective sj_adjust value
-    effective_sj_adjust <- ifelse(method == "sj-dpi", sj_adjust, 1.0)
-    
-    # Use get_PROBCLASS_MH with sj_adjust parameter
-    result = get_PROBCLASS_MH(
-      data = cat_data,
-      varCLASS = varCLASS,
-      varY = varY,
-      varID = varID,
-      method = method,
-      within = within,
-      maxNGROUP = maxNGROUP,
-      out_dir = out_dir,
-      n_iter = n_iter,
-      burnin = burnin,
-      proposal_sd = proposal_sd,
-      sj_adjust = effective_sj_adjust
-    )
-    
-    return(result)
-    
-  }, .options = furrr::furrr_options(
-    packages = "MultiModalR",
-    seed = TRUE
-  ), .progress = TRUE)
-  
-  # Reset to sequential
-  future::plan(future::sequential)
-  
-  # If out_dir is NULL, combine and return results
-  if(is.null(out_dir)) {
-    # Remove NULL results (happens when out_dir is provided in get_PROBCLASS_MH)
-    result_list = result_list[!sapply(result_list, is.null)]
-    
-    if(length(result_list) > 0) {
-      combined_result = do.call(rbind, result_list)
-      message("Parallel analysis complete. Combined result has ", 
-              nrow(combined_result), " rows.")
-      
-      return(combined_result)
-    } else {
-      message("All results written to output directory.")
-      return(invisible(NULL))
-    }
-  } else {
-    message("All results written to: ", out_dir)
-    return(invisible(NULL))
-  }
-}
-
-#' Plot validation of subgroup assignments (handles both balanced and imbalanced data)
-#'
-#' @param csv_dir Directory containing CSV files from create_MM_output
-#' @param observed_df Original data frame with true subgroups
-#' @param subpop_col Character, name of the true subgroup column in observed_df (default: "Subpopulation")
-#' @param value_col Character, name of the value column in observed_df (default: "Value")
-#' @param id_col Character, name of the ID column in observed_df (default: "ID")
-#' @param pattern Pattern to match CSV files (default: "^df_")
-#' @return ggplot object showing validation results
-#' @export
-plot_VALIDATION <- function(csv_dir, observed_df, 
-                            subpop_col = "Subpopulation", 
-                            value_col = "Value",
-                            id_col = "ID",
-                            pattern = "^df_") {
-  
-  # Check required packages
-  required = c("ggplot2", "dplyr", "readr", "purrr", "tidyr")
-  missing = required[!required %in% installed.packages()]
-  if(length(missing) > 0) {
-    stop("Missing packages: ", paste(missing, collapse = ", "),
-         "\nPlease install with: install.packages(c('", paste(missing, collapse = "', '"), "'))")
-  }
-  
-  # Get list of CSV files
-  FIL = list.files(csv_dir, pattern = pattern, full.names = TRUE) 
-  
-  if(length(FIL) == 0) {
-    stop("No CSV files found in ", csv_dir, " matching pattern: ", pattern)
-  }
-  
-  # Read and combine predicted data
-  predicted_list = list()
-  for(f in FIL) {
-    predicted_list[[f]] = readr::read_csv(f, show_col_types = FALSE) %>%
-      as.data.frame() %>%
-      dplyr::mutate(Main_Class = as.character(Main_Class))
-  }
-  
-  predicted = purrr::map_dfr(predicted_list, ~ .x) %>%
-    dplyr::mutate(Main_Class = gsub("__", "::", Main_Class))
-  
-  # Extract true subgroup numbers
-  observed_df[[subpop_col]] = as.numeric(
-    gsub("Group ", "", as.character(observed_df[[subpop_col]]))
-  )
-  
-  # Ensure ID columns are character type
-  observed_df[[id_col]] = as.character(observed_df[[id_col]])
-  predicted[[id_col]] = as.character(predicted[[id_col]])
-  
-  # Match by ID only
-  matched = dplyr::inner_join(observed_df, predicted, by = id_col)
-  
-  # ========== FIX: Calculate ALIGNED accuracy (handles label switching) ==========
-  
-  # For each category, align labels by value order and track correct counts
-  all_correct = c()
-  accuracy_by_class = list()
-  
-  for(category in unique(matched$Main_Class)) {
-    cat_data = matched %>% dplyr::filter(Main_Class == category)
-    
-    # Get unique groups
-    true_groups = sort(unique(cat_data[[subpop_col]]))
-    pred_groups = sort(unique(cat_data$Assigned_Group))
-    
-    if(length(true_groups) != length(pred_groups)) {
-      # If group counts don't match, use raw accuracy
-      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Group
-    } else {
-      # Calculate mean value for each true group
-      true_means = cat_data %>%
-        dplyr::group_by(!!rlang::sym(subpop_col)) %>%
-        dplyr::summarize(mean_val = mean(!!rlang::sym(value_col)), .groups = 'drop') %>%
-        dplyr::arrange(mean_val) %>%
-        dplyr::pull(!!rlang::sym(subpop_col))
-      
-      # Calculate mean value for each predicted group  
-      pred_means = cat_data %>%
-        dplyr::group_by(Assigned_Group) %>%
-        dplyr::summarize(mean_val = mean(y), .groups = 'drop') %>%
-        dplyr::arrange(mean_val) %>%
-        dplyr::pull(Assigned_Group)
-      
-      # Create mapping: align by value order
-      mapping = setNames(true_means, pred_means)
-      
-      # Apply mapping to calculate aligned accuracy
-      cat_data$Assigned_Aligned = mapping[as.character(cat_data$Assigned_Group)]
-      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Aligned
-    }
-    
-    # Store correct/incorrect for overall calculation
-    all_correct = c(all_correct, correct_vector)
-    
-    # Calculate accuracy for this category
-    acc = round(mean(correct_vector, na.rm = TRUE) * 100, 1)
-    
-    accuracy_by_class[[category]] = data.frame(
-      Main_Class = category,
-      accuracy = acc,
-      n = nrow(cat_data)
-    )
-  }
-  
-  # Calculate overall accuracy correctly
-  overall_accuracy = round(mean(all_correct, na.rm = TRUE) * 100, 1)
-  
-  # Create label data for plot (using ALIGNED accuracy)
-  label_data = purrr::map_dfr(accuracy_by_class, ~ .x) %>%
-    dplyr::mutate(Percent = format(accuracy, nsmall = 1))
-  
-  # Create color palette for subgroups
-  n_groups = length(unique(predicted$Assigned_Group))
-  group_colors = c("firebrick2", "forestgreen", "cyan3", "gold", "purple", "orange")
-  group_colors = group_colors[1:min(n_groups, length(group_colors))]
-  
-  # Plot validation - EXACT SAME STYLING AS BEFORE
-  p = ggplot2::ggplot(predicted, ggplot2::aes(x = y)) +
-    ggplot2::geom_density(col = NA, fill = "grey98", adjust = 0.8) +
-    ggplot2::geom_jitter(ggplot2::aes(y = 0.05, color = factor(Assigned_Group)), 
-                         height = 0.05, size = 2, shape = 16, alpha = .5) + 
-    ggplot2::scale_color_manual(values = group_colors, 
-                                name = "Assigned Groups") +  
-    ggplot2::theme_dark() +
-    ggplot2::labs(title = paste0("Validation of Subgroup Assignments (", overall_accuracy, "% overall)"),
-                  x = "Value", y = "Density") +
-    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
-    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
-    ggplot2::facet_wrap(~ Main_Class, ncol = 3) +  
-    ggplot2::geom_text(data = label_data, ggplot2::aes(x = Inf, y = Inf, 
-                                                       label = paste0(Percent, "%")), 
-                       hjust = 1.2, vjust = 1.2, size = 5, fontface = "bold", 
-                       inherit.aes = FALSE, col = "grey15") +  
-    ggplot2::theme(legend.position = "top",
-                   legend.key = ggplot2::element_rect(fill = "transparent", color = NA),
-                   axis.text.y = ggplot2::element_blank(),
-                   axis.ticks = ggplot2::element_blank(),
-                   panel.grid.major = ggplot2::element_blank(),
-                   panel.grid.minor = ggplot2::element_blank(),
-                   plot.title = ggplot2::element_text(hjust = .5),
-                   plot.subtitle = ggplot2::element_text(hjust = .5, size = 10)) +
-    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
-  
-  return(p)
-}
-
-# ============ NEW FUNCTIONS ============
-
-#' Dirichlet MCMC (identical interface to MM_MH)
-#' 
-#' @param y Numeric vector of data
-#' @param grp Number of mixture components
-#' @param prior_means Prior means for components
-#' @param ids Vector of IDs for validation
-#' @param n_iter Number of MCMC iterations
-#' @param burnin Burn-in period
-#' @param proposal_sd Proposal standard deviation
-#' @param dirichlet_alpha Dirichlet concentration parameter
-#' @param seed Random seed
-#' @return List with MCMC results (SAME FORMAT as MM_MH)
-#' @export
-MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
-                            n_iter = 5000, burnin = 2000,
-                            proposal_sd = 0.15, dirichlet_alpha = 2.0,
-                            seed = NULL) {
-  
-  # Same validation as MM_MH
-  if(missing(ids)) {
-    stop("'ids' argument is required for validation.")
-  }
-  
-  if(is.null(ids)) {
-    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
-  }
-  
-  if(length(ids) != length(y)) {
-    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
-  }
-  
-  if(is.null(seed)) {
-    seed = sample.int(.Machine$integer.max, 1)
-  }
-  
-  if(is.null(prior_means)) {
-    prior_means = seq(min(y), max(y), length.out = grp)
-  }
-  
-  if(length(prior_means) != grp) {
-    warning("prior_means length doesn't match grp. Using equally spaced means.")
-    prior_means = seq(min(y), max(y), length.out = grp)
-  }
-  
-  # Call Dirichlet C++ function
-  result = MM_MH_dirichlet_cpp(
-    y = as.numeric(y),
-    prior_means = as.numeric(prior_means),
-    n_iter = as.integer(n_iter),
-    burnin = as.integer(burnin),
-    proposal_sd = as.numeric(proposal_sd),
-    dirichlet_alpha = as.numeric(dirichlet_alpha),
-    seed = as.integer(seed)
-  )
-  
-  # Ensure compatibility with create_MM_output
-  if(is.null(result$mean_acceptance)) {
-    result$mean_acceptance = rep(0.5, result$n_components)
-  }
-  
-  # Store IDs 
-  result$ids = ids
-  result$method = "dirichlet"  
-  
-  return(result)
-}
-
 #' Density height-aware mode detection
 #' 
 #' Returns mode estimates from FOUR different bandwidth methods.
@@ -871,29 +185,308 @@ group_MODES_enhanced <- function(df, within = 0.1) {
   return(result)
 }
 
-#' Parallel Dirichlet/Metropolis wrapper 
+#' Fast MCMC for mixture models (Metropolis-Hastings-within-partial-Gibbs)
 #' 
-#' @param ... All parameters from fuss_PARALLEL
+#' @param y Numeric vector of data
+#' @param grp Number of mixture components
+#' @param prior_means Prior means for components (optional)
+#' @param ids Vector of IDs for validation (required)
+#' @param n_iter Number of MCMC iterations (default: 1000)
+#' @param burnin Burn-in period (default: 500)
+#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param seed Random seed
+#' @return List with MCMC results
+#' @export
+MM_MH <- function(y, grp, prior_means = NULL, ids,
+                  n_iter = 1000, burnin = 500,
+                  proposal_sd = 0.15, seed = NULL) {
+  
+  # Validate IDs - they are required
+  if(missing(ids)) {
+    stop("'ids' argument is required for validation.")
+  }
+  
+  if(is.null(ids)) {
+    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
+  }
+  
+  if(length(ids) != length(y)) {
+    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
+  }
+  
+  if(any(is.na(ids))) {
+    warning("NA values found in IDs. These will be preserved but may cause issues in validation.")
+  }
+  
+  if(any(duplicated(ids))) {
+    warning("Duplicate IDs found. This may cause issues in validation.")
+  }
+  
+  if(is.null(seed)) {
+    seed = sample.int(.Machine$integer.max, 1)
+  }
+  
+  if(is.null(prior_means)) {
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  # Ensure prior_means matches grp
+  if(length(prior_means) != grp) {
+    warning("prior_means length doesn't match grp. Using equally spaced means.")
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  result = MM_MH_cpp(
+    y = as.numeric(y),
+    prior_means = as.numeric(prior_means),
+    n_iter = as.integer(n_iter),
+    burnin = as.integer(burnin),
+    proposal_sd = as.numeric(proposal_sd),
+    seed = as.integer(seed)
+  )
+  
+  # Store the IDs in the result
+  result$ids = ids
+  result$method = "metropolis-hastings"
+  
+  return(result)
+}
+
+#' Dirichlet MCMC (identical interface to MM_MH)
+#' 
+#' @param y Numeric vector of data
+#' @param grp Number of mixture components
+#' @param prior_means Prior means for components
+#' @param ids Vector of IDs for validation
+#' @param n_iter Number of MCMC iterations
+#' @param burnin Burn-in period
+#' @param proposal_sd Proposal standard deviation
+#' @param dirichlet_alpha Dirichlet concentration parameter
+#' @param seed Random seed
+#' @return List with MCMC results (SAME FORMAT as MM_MH)
+#' @export
+MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
+                            n_iter = 5000, burnin = 2000,
+                            proposal_sd = 0.15, dirichlet_alpha = 2.0,
+                            seed = NULL) {
+  
+  # Same validation as MM_MH
+  if(missing(ids)) {
+    stop("'ids' argument is required for validation.")
+  }
+  
+  if(is.null(ids)) {
+    stop("'ids' cannot be NULL. Provide a vector of IDs for validation.")
+  }
+  
+  if(length(ids) != length(y)) {
+    stop("ID length (", length(ids), ") doesn't match y length (", length(y), ").")
+  }
+  
+  if(is.null(seed)) {
+    seed = sample.int(.Machine$integer.max, 1)
+  }
+  
+  if(is.null(prior_means)) {
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  if(length(prior_means) != grp) {
+    warning("prior_means length doesn't match grp. Using equally spaced means.")
+    prior_means = seq(min(y), max(y), length.out = grp)
+  }
+  
+  # Call Dirichlet C++ function
+  result = MM_MH_dirichlet_cpp(
+    y = as.numeric(y),
+    prior_means = as.numeric(prior_means),
+    n_iter = as.integer(n_iter),
+    burnin = as.integer(burnin),
+    proposal_sd = as.numeric(proposal_sd),
+    dirichlet_alpha = as.numeric(dirichlet_alpha),
+    seed = as.integer(seed)
+  )
+  
+  # Ensure compatibility with create_MM_output
+  if(is.null(result$mean_acceptance)) {
+    result$mean_acceptance = rep(0.5, result$n_components)
+  }
+  
+  # Store IDs 
+  result$ids = ids
+  result$method = "dirichlet"  
+  
+  return(result)
+}
+
+
+
+#' Create output data frame
+#' 
+#' Converts MCMC results to exact CSV format
+#' 
+#' @param mcmc_result Output from MM_MH() or MM_MH_dirichlet()
+#' @param y_original Original y values (if different from mcmc_result$y)
+#' @param group_original Original group assignments (optional)
+#' @param main_class Category/class name
+#' @param max_groups Maximum number of groups for output columns
+#' @return Data frame in CSV format
+#' @export
+create_MM_output <- function(mcmc_result, y_original = NULL, 
+                             group_original = NULL, 
+                             main_class = "", max_groups = 5) {
+  
+  n = length(mcmc_result$y)
+  n_components = mcmc_result$n_components
+  
+  # Get IDs from mcmc_result (should have been added by MM_MH if provided)
+  ids = mcmc_result$ids
+  
+  # Check ID length if IDs exist
+  if(!is.null(ids) && length(ids) != n) {
+    warning("ID length in mcmc_result (", length(ids), ") doesn't match data length (", n, "). IDs will be omitted.")
+    ids = NULL
+  }
+  
+  # Use original y if provided
+  if(!is.null(y_original)) {
+    if(length(y_original) != n) {
+      warning("y_original length doesn't match. Using MCMC y values.")
+      y_values = mcmc_result$y
+    } else {
+      y_values = y_original
+    }
+  } else {
+    y_values = mcmc_result$y
+  }
+  
+  # Create the data frame with or without ID
+  if(!is.null(ids)) {
+    df = data.frame(
+      ID = ids,
+      y = y_values,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    df = data.frame(
+      y = y_values,
+      stringsAsFactors = FALSE
+    )
+  }
+  
+  # Add original group if provided
+  if(!is.null(group_original)) {
+    if(length(group_original) == n) {
+      df$Group = group_original
+    } else {
+      warning("Length of group_original doesn't match data. Skipping.")
+    }
+  }
+  
+  # Add probability columns for actual components
+  for(k in 1:n_components) {
+    df[[paste0("Group_", k)]] = mcmc_result$z_probs[, k]
+  }
+  
+  # Add NA columns for missing groups (up to max_groups)
+  for(k in (n_components + 1):max_groups) {
+    df[[paste0("Group_", k)]] = NA_real_
+  }
+  
+  # Add assignment columns
+  df$Assigned_Group = mcmc_result$assigned_group
+  df$Min_Assigned = mcmc_result$min_assigned
+  df$Max_Assigned = mcmc_result$max_assigned
+  df$Mean_Assigned = mcmc_result$mean_assigned
+  df$Mode_Assigned = mcmc_result$mode_assigned
+  
+  # Ensure Main_Class is character (not factor or logical)
+  df$Main_Class = as.character(main_class)
+  
+  return(df)
+}
+
+#' Parallel Bayesian mixture modeling using Markov Chain Monte Carlo (MCMC)
+#' 
+#' Performs multimodal probability assignment using either:
+#' 1. Metropolis-Hastings-within-partial-Gibbs 
+#' 2. Dirichlet-Multinomial 
+#'  
+#' @param data Input data frame
+#' @param varCLASS Character, category variable name (required)
+#' @param varY Character, value variable name (required)
+#' @param varID Character, ID variable name (required)
+#' @param method Density estimator method ("sj-dpi", "bcv", "ucv", "nrd") (default: "sj-dpi")
+#' @param within Range parameter for grouping modes (default: 1.0)
+#' @param maxNGROUP Maximum number of groups (default: 5)
+#' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
+#' @param n_workers Number of parallel workers (default: 3)
+#' @param n_iter Number of MCMC iterations (default: 1000 for metropolis, 3000 for dirichlet)
+#' @param burnin Burn-in period (default: 500 for metropolis, 1000 for dirichlet)
+#' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
+#' @param sj_adjust Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
 #' @param mcmc_method "dirichlet" or "metropolis" (default: "dirichlet")
 #' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
-#' @param method Density estimator method ("sj-dpi", "bcv", "ucv", "nrd") (default: "sj-dpi")
-#' @param sj_adjust Adjustment factor for ALL density estimator methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
-#' @return Same as fuss_PARALLEL
+#' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
-fuss_PARALLEL_MAIN <- function(..., 
+fuss_PARALLEL_mcmc <- function(data, 
+                               varCLASS, 
+                               varY, 
+                               varID, 
+                               method = "sj-dpi", 
+                               within = 1.0, 
+                               maxNGROUP = 5, 
+                               out_dir = NULL, 
+                               n_workers = 3,  
+                               n_iter = NULL, 
+                               burnin = NULL,
+                               proposal_sd = 0.15, 
+                               sj_adjust = 0.5,
                                mcmc_method = "dirichlet",
-                               dirichlet_alpha = 2.0,
-                               method = "sj-dpi",           
-                               sj_adjust = 0.5) {
+                               dirichlet_alpha = 2.0) {
   
-  # Capture all arguments
-  args = list(...)
+  # Validate inputs
+  if(!is.data.frame(data)) {
+    stop("data must be a data frame")
+  }
   
-  # Define a custom processor that uses Dirichlet
-  process_category_dirichlet = function(cat_data, varCLASS, varY, varID,
-                                        method, within, maxNGROUP, out_dir,
-                                        n_iter, burnin, proposal_sd, sj_adjust,
-                                        mcmc_method, dirichlet_alpha) {
+  if(!varCLASS %in% names(data)) {
+    stop("varCLASS '", varCLASS, "' not found in data")
+  }
+  
+  if(!varY %in% names(data)) {
+    stop("varY '", varY, "' not found in data")
+  }
+  
+  if(!varID %in% names(data)) {
+    stop("varID '", varID, "' not found in data")
+  }
+  
+  # Set sensible defaults based on MCMC method
+  if(is.null(n_iter)) {
+    n_iter = ifelse(mcmc_method == "dirichlet", 3000, 1000)
+  }
+  
+  if(is.null(burnin)) {
+    burnin = ifelse(mcmc_method == "dirichlet", 1000, 500)
+  }
+  
+  # Split data by category
+  categories = unique(data[[varCLASS]])
+  data_list = split(data, data[[varCLASS]])
+  
+  message("Processing ", length(categories), " categories in parallel with ", 
+          n_workers, " workers")
+  message("Settings: MCMC = ", mcmc_method, 
+          ", Mode detection = ", method, 
+          ", sj_adjust = ", sj_adjust,
+          ", within = ", within)
+  
+  # Define processing function
+  process_category <- function(cat_data, varCLASS, varY, varID,
+                               method, within, maxNGROUP, out_dir,
+                               n_iter, burnin, proposal_sd, sj_adjust,
+                               mcmc_method, dirichlet_alpha) {
     
     cat_name = as.character(unique(cat_data[[varCLASS]])[1])
     message("Processing category: ", cat_name, " (", mcmc_method, ")")
@@ -901,57 +494,82 @@ fuss_PARALLEL_MAIN <- function(...,
     y = cat_data[[varY]]
     ids = cat_data[[varID]]
     
-    # Mode detection with enhanced method 
-    mode_result = get_MODES_enhanced(y, adjust = sj_adjust, threshold = 1.0)
+    # Skip if insufficient data
+    if(length(y) < 5) {
+      warning("  Skipping category '", cat_name, "': insufficient data (n = ", length(y), ")")
+      return(NULL)
+    }
+    
+    # Mode detection with enhanced method
+    mode_result = tryCatch({
+      get_MODES_enhanced(y, adjust = sj_adjust, threshold = 1.0)
+    }, error = function(e) {
+      warning("  Mode detection failed for '", cat_name, "': ", e$message)
+      return(NULL)
+    })
+    
+    if(is.null(mode_result)) {
+      return(NULL)
+    }
     
     if(method %in% names(mode_result)) {
       modes_df = mode_result[[method]]
     } else {
-      # Try common variations
-      if(method == "sj_dpi" && "sj-dpi" %in% names(mode_result)) {
-        modes_df = mode_result[["sj-dpi"]]
-        warning("Method 'sj_dpi' not found. Using 'sj-dpi' instead.")
-      } else if(method == "sj-dpi" && "sj_dpi" %in% names(mode_result)) {
-        modes_df = mode_result[["sj_dpi"]]
-        warning("Method 'sj-dpi' not found. Using 'sj_dpi' instead.")
-      } else {
-        modes_df = mode_result[["sj-dpi"]]
-        warning("Method '", method, "' not found. Using 'sj-dpi'.")
-      }
+      modes_df = mode_result[["sj-dpi"]]
+      warning("Method '", method, "' not found. Using 'sj-dpi'.")
     }
     
     # Group modes
     modes_grouped = group_MODES_enhanced(modes_df, within = within)
     n_components = nrow(modes_grouped)
-    prior_means = modes_grouped$Est_Mode
+    
+    # Fallback if no modes detected
+    if(n_components == 0) {
+      warning("  No modes detected for '", cat_name, "'. Using 2 equally spaced modes.")
+      n_components = 2
+      prior_means = seq(min(y), max(y), length.out = n_components)
+    } else {
+      prior_means = modes_grouped$Est_Mode
+    }
     
     message("  Detected ", n_components, " components")
     
     # Choose MCMC method
-    if(mcmc_method == "dirichlet") {
-      mh_result = MM_MH_dirichlet(
-        y = y,
-        grp = n_components,
-        prior_means = prior_means,
-        ids = ids,
-        n_iter = n_iter,
-        burnin = burnin,
-        proposal_sd = proposal_sd,
-        dirichlet_alpha = dirichlet_alpha,
-        seed = 123
-      )
-    } else {
-      mh_result = MM_MH(
-        y = y,
-        grp = n_components,
-        prior_means = prior_means,
-        ids = ids,
-        n_iter = n_iter,
-        burnin = burnin,
-        proposal_sd = proposal_sd,
-        seed = 123
-      )
+    mh_result = tryCatch({
+      if(mcmc_method == "dirichlet") {
+        MM_MH_dirichlet(
+          y = y,
+          grp = n_components,
+          prior_means = prior_means,
+          ids = ids,
+          n_iter = n_iter,
+          burnin = burnin,
+          proposal_sd = proposal_sd,
+          dirichlet_alpha = dirichlet_alpha,
+          seed = 123
+        )
+      } else {
+        MM_MH(
+          y = y,
+          grp = n_components,
+          prior_means = prior_means,
+          ids = ids,
+          n_iter = n_iter,
+          burnin = burnin,
+          proposal_sd = proposal_sd,
+          seed = 123
+        )
+      }
+    }, error = function(e) {
+      warning("  MCMC failed for '", cat_name, "': ", e$message)
+      return(NULL)
+    })
+    
+    if(is.null(mh_result)) {
+      return(NULL)
     }
+    
+    message("  MCMC complete for '", cat_name, "'")
     
     # Create output
     output_df = create_MM_output(
@@ -968,7 +586,7 @@ fuss_PARALLEL_MAIN <- function(...,
     # Write to CSV if out_dir provided
     if(!is.null(out_dir)) {
       if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-      filename = paste0("df_", cat_name, "_", mcmc_method, ".csv")
+      filename = paste0("df_", gsub("[^a-zA-Z0-9]", "_", cat_name), "_", mcmc_method, ".csv")
       filepath = file.path(out_dir, filename)
       write.csv(output_df, filepath, row.names = FALSE, quote = TRUE)
       message("  Written: ", filepath)
@@ -978,46 +596,25 @@ fuss_PARALLEL_MAIN <- function(...,
     return(output_df)
   }
   
-  # Extract parameters from args 
-  data = args$data
-  varCLASS = args$varCLASS
-  varY = args$varY
-  varID = args$varID
-  within = ifelse(is.null(args$within), 1, args$within)
-  maxNGROUP = ifelse(is.null(args$maxNGROUP), 5, args$maxNGROUP)
-  out_dir = args$out_dir
-  n_workers = ifelse(is.null(args$n_workers), 3, args$n_workers)
-  n_iter = ifelse(is.null(args$n_iter), 1000, args$n_iter)
-  burnin = ifelse(is.null(args$burnin), 500, args$burnin)
-  proposal_sd = ifelse(is.null(args$proposal_sd), 0.15, args$proposal_sd)
-  
-  # Split data by category
-  categories = unique(data[[varCLASS]])
-  data_list = split(data, data[[varCLASS]])
-  
-  message("Processing ", length(categories), " categories in parallel with ", 
-          n_workers, " workers (MCMC: ", mcmc_method, ", Mode: ", method, 
-          ", sj_adjust: ", sj_adjust, ")")
-  
   # Setup parallel processing
   future::plan(future::multisession, workers = n_workers)
   
   # Process each category in parallel
   result_list = furrr::future_map(data_list, function(cat_data) {
     
-    process_category_dirichlet(
+    process_category(
       cat_data = cat_data,
       varCLASS = varCLASS,
       varY = varY,
       varID = varID,
-      method = method,          
+      method = method,
       within = within,
       maxNGROUP = maxNGROUP,
       out_dir = out_dir,
       n_iter = n_iter,
       burnin = burnin,
       proposal_sd = proposal_sd,
-      sj_adjust = sj_adjust,    
+      sj_adjust = sj_adjust,
       mcmc_method = mcmc_method,
       dirichlet_alpha = dirichlet_alpha
     )
@@ -1045,9 +642,161 @@ fuss_PARALLEL_MAIN <- function(...,
       attr(combined_result, "sj_adjust") = sj_adjust
       
       return(combined_result)
+    } else {
+      warning("No results were generated. Check your data and parameters.")
+      return(NULL)
     }
   }
   
-  message("Analysis complete.")
+  message("Analysis complete. Results written to: ", out_dir)
   return(invisible(NULL))
 }
+
+#' Plot validation of subgroup assignments (handles both balanced and imbalanced data)
+#'
+#' @param csv_dir Directory containing CSV files from create_MM_output
+#' @param observed_df Original data frame with true subgroups
+#' @param subpop_col Character, name of the true subgroup column in observed_df (default: "Subpopulation")
+#' @param value_col Character, name of the value column in observed_df (default: "Value")
+#' @param id_col Character, name of the ID column in observed_df (default: "ID")
+#' @param pattern Pattern to match CSV files (default: "^df_")
+#' @return ggplot object showing validation results
+#' @export
+plot_VALIDATION <- function(csv_dir, observed_df, 
+                            subpop_col = "Subpopulation", 
+                            value_col = "Value",
+                            id_col = "ID",
+                            pattern = "^df_") {
+  
+  # Check required packages
+  required = c("ggplot2", "dplyr", "readr", "purrr", "tidyr")
+  missing = required[!required %in% installed.packages()]
+  if(length(missing) > 0) {
+    stop("Missing packages: ", paste(missing, collapse = ", "),
+         "\nPlease install with: install.packages(c('", paste(missing, collapse = "', '"), "'))")
+  }
+  
+  # Get list of CSV files
+  FIL = list.files(csv_dir, pattern = pattern, full.names = TRUE) 
+  
+  if(length(FIL) == 0) {
+    stop("No CSV files found in ", csv_dir, " matching pattern: ", pattern)
+  }
+  
+  # Read and combine predicted data
+  predicted_list = list()
+  for(f in FIL) {
+    predicted_list[[f]] = readr::read_csv(f, show_col_types = FALSE) %>%
+      as.data.frame() %>%
+      dplyr::mutate(Main_Class = as.character(Main_Class))
+  }
+  
+  predicted = purrr::map_dfr(predicted_list, ~ .x) %>%
+    dplyr::mutate(Main_Class = gsub("__", "::", Main_Class))
+  
+  # Extract true subgroup numbers
+  observed_df[[subpop_col]] = as.numeric(
+    gsub("Group ", "", as.character(observed_df[[subpop_col]]))
+  )
+  
+  # Ensure ID columns are character type
+  observed_df[[id_col]] = as.character(observed_df[[id_col]])
+  predicted[[id_col]] = as.character(predicted[[id_col]])
+  
+  # Match by ID only
+  matched = dplyr::inner_join(observed_df, predicted, by = id_col)
+  
+  # ========== FIX: Calculate ALIGNED accuracy (handles label switching) ==========
+  
+  # For each category, align labels by value order and track correct counts
+  all_correct = c()
+  accuracy_by_class = list()
+  
+  for(category in unique(matched$Main_Class)) {
+    cat_data = matched %>% dplyr::filter(Main_Class == category)
+    
+    # Get unique groups
+    true_groups = sort(unique(cat_data[[subpop_col]]))
+    pred_groups = sort(unique(cat_data$Assigned_Group))
+    
+    if(length(true_groups) != length(pred_groups)) {
+      # If group counts don't match, use raw accuracy
+      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Group
+    } else {
+      # Calculate mean value for each true group
+      true_means = cat_data %>%
+        dplyr::group_by(!!rlang::sym(subpop_col)) %>%
+        dplyr::summarize(mean_val = mean(!!rlang::sym(value_col)), .groups = 'drop') %>%
+        dplyr::arrange(mean_val) %>%
+        dplyr::pull(!!rlang::sym(subpop_col))
+      
+      # Calculate mean value for each predicted group  
+      pred_means = cat_data %>%
+        dplyr::group_by(Assigned_Group) %>%
+        dplyr::summarize(mean_val = mean(y), .groups = 'drop') %>%
+        dplyr::arrange(mean_val) %>%
+        dplyr::pull(Assigned_Group)
+      
+      # Create mapping: align by value order
+      mapping = setNames(true_means, pred_means)
+      
+      # Apply mapping to calculate aligned accuracy
+      cat_data$Assigned_Aligned = mapping[as.character(cat_data$Assigned_Group)]
+      correct_vector = cat_data[[subpop_col]] == cat_data$Assigned_Aligned
+    }
+    
+    # Store correct/incorrect for overall calculation
+    all_correct = c(all_correct, correct_vector)
+    
+    # Calculate accuracy for this category
+    acc = round(mean(correct_vector, na.rm = TRUE) * 100, 1)
+    
+    accuracy_by_class[[category]] = data.frame(
+      Main_Class = category,
+      accuracy = acc,
+      n = nrow(cat_data)
+    )
+  }
+  
+  # Calculate overall accuracy correctly
+  overall_accuracy = round(mean(all_correct, na.rm = TRUE) * 100, 1)
+  
+  # Create label data for plot (using ALIGNED accuracy)
+  label_data = purrr::map_dfr(accuracy_by_class, ~ .x) %>%
+    dplyr::mutate(Percent = format(accuracy, nsmall = 1))
+  
+  # Create color palette for subgroups
+  n_groups = length(unique(predicted$Assigned_Group))
+  group_colors = c("firebrick2", "forestgreen", "cyan3", "gold", "purple", "orange")
+  group_colors = group_colors[1:min(n_groups, length(group_colors))]
+  
+  # Plot validation - EXACT SAME STYLING AS BEFORE
+  p = ggplot2::ggplot(predicted, ggplot2::aes(x = y)) +
+    ggplot2::geom_density(col = NA, fill = "grey98", adjust = 0.8) +
+    ggplot2::geom_jitter(ggplot2::aes(y = 0.05, color = factor(Assigned_Group)), 
+                         height = 0.05, size = 2, shape = 16, alpha = .5) + 
+    ggplot2::scale_color_manual(values = group_colors, 
+                                name = "Assigned Groups") +  
+    ggplot2::theme_dark() +
+    ggplot2::labs(title = paste0("Validation of Subgroup Assignments (", overall_accuracy, "% overall)"),
+                  x = "Value", y = "Density") +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0, 0))) +
+    ggplot2::facet_wrap(~ Main_Class, ncol = 3) +  
+    ggplot2::geom_text(data = label_data, ggplot2::aes(x = Inf, y = Inf, 
+                                                       label = paste0(Percent, "%")), 
+                       hjust = 1.2, vjust = 1.2, size = 5, fontface = "bold", 
+                       inherit.aes = FALSE, col = "grey15") +  
+    ggplot2::theme(legend.position = "top",
+                   legend.key = ggplot2::element_rect(fill = "transparent", color = NA),
+                   axis.text.y = ggplot2::element_blank(),
+                   axis.ticks = ggplot2::element_blank(),
+                   panel.grid.major = ggplot2::element_blank(),
+                   panel.grid.minor = ggplot2::element_blank(),
+                   plot.title = ggplot2::element_text(hjust = .5),
+                   plot.subtitle = ggplot2::element_text(hjust = .5, size = 10)) +
+    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
+  
+  return(p)
+}
+

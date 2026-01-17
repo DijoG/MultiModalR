@@ -2,7 +2,7 @@
 % Please edit documentation in R/MultiModalR.R
 \name{MM_MH}
 \alias{MM_MH}
-\title{Fast MCMC for mixture models (C++ implementation)}
+\title{Fast MCMC for mixture models (Metropolis-Hastings-within-partial-Gibbs)}
 \usage{
 MM_MH(
   y,
@@ -36,5 +36,5 @@ MM_MH(
 List with MCMC results
 }
 \description{
-Fast MCMC for mixture models (C++ implementation)
+Fast MCMC for mixture models (Metropolis-Hastings-within-partial-Gibbs)
 }
