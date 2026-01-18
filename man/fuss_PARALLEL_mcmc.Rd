@@ -18,7 +18,7 @@ fuss_PARALLEL_mcmc(
   burnin = NULL,
   proposal_sd = 0.15,
   sj_adjust = 0.5,
-  mcmc_method = "dirichlet",
+  mcmc_method = "metropolis",
   dirichlet_alpha = 2
 )
 }
@@ -49,7 +49,7 @@ fuss_PARALLEL_mcmc(
 
 \item{sj_adjust}{Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)}
 
-\item{mcmc_method}{"dirichlet" or "metropolis" (default: "dirichlet")}
+\item{mcmc_method}{"metropolis" or "dirichlet"(default: "metropolis")}
 
 \item{dirichlet_alpha}{Dirichlet concentration parameter (default: 2.0)}
 }

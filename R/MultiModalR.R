@@ -1,6 +1,6 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
 # Version: 1.0.0
-# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs)
+# Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs and Dirichlet-Multinomial)
 # Based on MINLAM (depreciated) by Gergő Diószegi
 
 #' @import Rcpp
@@ -425,7 +425,7 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param burnin Burn-in period (default: 500 for metropolis, 1000 for dirichlet)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param sj_adjust Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
-#' @param mcmc_method "dirichlet" or "metropolis" (default: "dirichlet")
+#' @param mcmc_method "metropolis" or "dirichlet"(default: "metropolis")
 #' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
 #' @export
@@ -442,7 +442,7 @@ fuss_PARALLEL_mcmc <- function(data,
                                burnin = NULL,
                                proposal_sd = 0.15, 
                                sj_adjust = 0.5,
-                               mcmc_method = "dirichlet",
+                               mcmc_method = "metropolis",
                                dirichlet_alpha = 2.0) {
   
   # Validate inputs
