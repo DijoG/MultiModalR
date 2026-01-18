@@ -421,8 +421,8 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param maxNGROUP Maximum number of groups (default: 5)
 #' @param out_dir Output directory for CSV files (if NULL, returns combined data frame)
 #' @param n_workers Number of parallel workers (default: 3)
-#' @param n_iter Number of MCMC iterations (default: 1000 for metropolis, 3000 for dirichlet)
-#' @param burnin Burn-in period (default: 500 for metropolis, 1000 for dirichlet)
+#' @param n_iter Number of MCMC iterations (default: 6000 for metropolis, 3000 for dirichlet)
+#' @param burnin Burn-in period (default: 2000 for metropolis, 1000 for dirichlet)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param sj_adjust Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
 #' @param mcmc_method "metropolis" or "dirichlet"(default: "metropolis")
@@ -464,11 +464,11 @@ fuss_PARALLEL_mcmc <- function(data,
   
   # Set sensible defaults based on MCMC method
   if(is.null(n_iter)) {
-    n_iter = ifelse(mcmc_method == "dirichlet", 3000, 1000)
+    n_iter = ifelse(mcmc_method == "dirichlet", 3000, 6000)
   }
   
   if(is.null(burnin)) {
-    burnin = ifelse(mcmc_method == "dirichlet", 1000, 500)
+    burnin = ifelse(mcmc_method == "dirichlet", 1000, 2000)
   }
   
   # Split data by category

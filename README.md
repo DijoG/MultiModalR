@@ -43,21 +43,21 @@ library(MultiModalR)
 
 # Prepare data and run analysis
 MultiModalR::fuss_PARALLEL_mcmc(
-  data = df,                 # -> requied
-  varCLASS = "Category",     # -> requied
-  varY = "Value",            # -> requied
-  varID = "ID",              # -> requied
-  method = "sj-dpi",         # /default
-  within = 1,                # /default
-  maxNGROUP = 5,             # /default
-  out_dir = ".../output",    # -> optional 
-  n_workers = 3,             # /default
-  n_iter = NULL,             # /default
-  burnin = NULL,             # /default
-  proposal_sd = .15,         # /default
-  sj_adjust = .5,            # /default
-  mcmc_method = "dirichlet", # /default
-  dirichlet_alpha = 2.0      # /default
+  data = df,                  # -> requied
+  varCLASS = "Category",      # -> requied
+  varY = "Value",             # -> requied
+  varID = "ID",               # -> requied
+  method = "sj-dpi",          # /default
+  within = 1,                 # /default
+  maxNGROUP = 5,              # /default
+  out_dir = ".../output",     # -> optional 
+  n_workers = 3,              # /default
+  n_iter = NULL,              # /default
+  burnin = NULL,              # /default
+  proposal_sd = 0.15,         # /default
+  sj_adjust = 0.5,            # /default
+  mcmc_method = "metropolis", # /default
+  dirichlet_alpha = 2.0       # /default
 )
 ```
 ## Detailed Example

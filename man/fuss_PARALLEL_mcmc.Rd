@@ -41,9 +41,9 @@ fuss_PARALLEL_mcmc(
 
 \item{n_workers}{Number of parallel workers (default: 3)}
 
-\item{n_iter}{Number of MCMC iterations (default: 1000 for metropolis, 3000 for dirichlet)}
+\item{n_iter}{Number of MCMC iterations (default: 6000 for metropolis, 3000 for dirichlet)}
 
-\item{burnin}{Burn-in period (default: 500 for metropolis, 1000 for dirichlet)}
+\item{burnin}{Burn-in period (default: 2000 for metropolis, 1000 for dirichlet)}
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
