@@ -121,7 +121,7 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
         // Log-likelihood term
         log_probs(k) = log(weights(k)) - 0.5 * z_score * z_score - log(sds(k));
         
-        // Repellant term to prevent collapse
+        // Repellant term (repulsion gamma) to prevent collapse
         double repellant_strength = 0.01;
         log_probs(k) -= repellant_strength * counts_excl_i(k);
         
