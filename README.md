@@ -6,13 +6,13 @@
 
 **MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using two advanced Markov Chain Monte Carlo (MCMC) algorithms implemented in optimized C++:
 
-1. Metropolis-Hastings-within-partial-Gibbs - Fast, proven algorithm
+1. Metropolis-Hastings-within-partial-Gibbs - Fast and robust
 
-2. Dirichlet-Multinomial (collapsed Gibbs) - Theoretically robust with proper uncertainty quantification
+2. Dirichlet-Multinomial (collapsed Gibbs) - Slower and rigorously robust 
 
 ## Features
 
-- **Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial (robustness)
+- **Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial
 - **Enhanced Mode Detection**: Height-aware peak detection with four bandwidth methods (SJ, nrd, bcv, ucv)
 - **Bayesian Probability Assignment**: Soft assignment with probability estimates
 - **Subpopulation Detection**: Automatic detection of multimodal components
