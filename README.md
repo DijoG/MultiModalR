@@ -148,7 +148,8 @@ MultiModalR::fuss_PARALLEL_mcmc(
   varY = "Value",
   varID = "ID",
   out_dir = "D:/MultiModalR/test",  
-  n_workers = cores
+  n_workers = cores,
+  mcmc_method = "metropolis"
 )
 tictoc::toc()
 # Processing time: 5.19 sec (3 cores) ~ 91.4% overall accuracy
@@ -162,8 +163,7 @@ MultiModalR::fuss_PARALLEL_mcmc(
   varY = "Value",
   varID = "ID",
   out_dir = "D:/MultiModalR/test",  
-  n_workers = cores,
-  mcmc_method = "metropolis"
+  n_workers = cores
 )
 tictoc::toc()
 # Processing time: 3.18 sec (3 cores) ~ 92% overall accuracy
