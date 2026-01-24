@@ -149,7 +149,7 @@ MultiModalR::fuss_PARALLEL_mcmc(
   varID = "ID",
   out_dir = "D:/MultiModalR/test",  
   n_workers = cores,
-  mcmc_method = "metropolis"
+  mcmc_method = "dirichlet"
 )
 tictoc::toc()
 # Processing time: 5.19 sec (3 cores) ~ 91.4% overall accuracy
