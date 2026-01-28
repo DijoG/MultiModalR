@@ -39,3 +39,6 @@ SystemRequirements: C++17
 RoxygenNote: 7.3.2
 Encoding: UTF-8
 NeedsCompilation: yes
+LazyData: true
+Depends: R (>= 3.5.0)
+
