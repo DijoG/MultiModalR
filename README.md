@@ -180,7 +180,6 @@ A **Data CSV** file consists of the following fields (maxNGROUP = 5):
   - `Main_Class`: Category/main group/class
 
 ### Validation Visualization
-
 ```r
 # Validate subgroup assignments
 MultiModalR::plot_VALIDATION(
@@ -193,5 +192,18 @@ MultiModalR::plot_VALIDATION(
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_003.png" width="550">
 
 **Validation results show accurate subgroup assignment across categories.**
+
+### Generate Custom Data
+
+You can also generate custom multimodal data with different parameters:
+```r
+# Generate custom dataset
+custom_data <- MultiModalR::create_multimodal_dummy(
+  seed = 12,
+  n_categories = 6,
+  n_per_group = 30,
+  n_subgroups = 4
+)
+```
 
 **Happy multimoda(e)ling!** 🏔️

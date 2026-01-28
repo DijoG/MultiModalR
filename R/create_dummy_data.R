@@ -4,7 +4,7 @@
 #' Generates the same dummy dataset used in the package. This is useful if users
 #' want to generate similar data with different parameters.
 #'
-#' @param seed Random seed for reproducibility (default: 123)
+#' @param seed Random seed for reproducibility (default: 5)
 #' @param n_categories Number of categories (default: 9)
 #' @param n_per_group Number of observations per subgroup per category (default: 25)
 #' @param n_subgroups Number of subgroups per category (default: 3)
@@ -15,8 +15,8 @@
 #' df <- create_multimodal_dummy()
 #' 
 #' # Generate with different parameters
-#' df2 <- create_multimodal_dummy(seed = 12345, n_categories = 6)
-create_multimodal_dummy <- function(seed = 123, 
+#' df2 <- create_multimodal_dummy(seed = 12, n_categories = 6)
+create_multimodal_dummy <- function(seed = 5, 
                                     n_categories = 9, 
                                     n_per_group = 25,
                                     n_subgroups = 3) {

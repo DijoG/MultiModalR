@@ -5,14 +5,14 @@
 \title{Create multimodal dummy dataset}
 \usage{
 create_multimodal_dummy(
-  seed = 123,
+  seed = 5,
   n_categories = 9,
   n_per_group = 25,
   n_subgroups = 3
 )
 }
 \arguments{
-\item{seed}{Random seed for reproducibility (default: 123)}
+\item{seed}{Random seed for reproducibility (default: 5)}
 
 \item{n_categories}{Number of categories (default: 9)}
 
@@ -32,5 +32,5 @@ want to generate similar data with different parameters.
 df <- create_multimodal_dummy()
 
 # Generate with different parameters
-df2 <- create_multimodal_dummy(seed = 12345, n_categories = 6)
+df2 <- create_multimodal_dummy(seed = 12, n_categories = 6)
 }
