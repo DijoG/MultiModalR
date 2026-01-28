@@ -6,7 +6,7 @@
 
 **MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using two advanced Markov Chain Monte Carlo (MCMC) algorithms implemented in optimized C++:
 
-1. Metropolis-Hastings-within-partial-Gibbs - Fast and robust
+1. Metropolis-Hastings within Gibbs Sampler for Gaussian Mixture Models - Fast and robust
 
 2. Dirichlet-Multinomial (collapsed Gibbs) - Slower and rigorously robust 
 
@@ -156,7 +156,7 @@ tictoc::toc()
 
 # - OR -->
 
-# Metropolis-Hastings-within-partial-Gibbs 
+# Metropolis-Hastings within Gibbs Sampler for Gaussian Mixture Models 
 MultiModalR::fuss_PARALLEL_mcmc(
   data = df,
   varCLASS = "Category",
