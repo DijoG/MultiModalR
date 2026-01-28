@@ -43,10 +43,10 @@ library(MultiModalR)
 
 # Prepare data and run analysis
 MultiModalR::fuss_PARALLEL_mcmc(
-  data = df,                  # -> requied
-  varCLASS = "Category",      # -> requied
-  varY = "Value",             # -> requied
-  varID = "ID",               # -> requied
+  data = df,                  # -> required
+  varCLASS = "Category",      # -> required
+  varY = "Value",             # -> required
+  varID = "ID",               # -> required
   method = "sj-dpi",          # /default
   within = 1,                 # /default
   maxNGROUP = 5,              # /default
@@ -62,39 +62,28 @@ MultiModalR::fuss_PARALLEL_mcmc(
 ```
 ## Detailed Example
 
-### Data Generation
+### Data
 
-For dummy data creation the **truncnorm** package is needed.
+Dummy data is provided by the package.
 
 ```r
-library(tidyverse);library(truncnorm)
+library(MultiModalR)
 
-# Set seed for reproducibility
-set.seed(5)
+# Load the built-in dataset
+df <- MultiModalR::multimodal_dummy
 
-# Define nine categories with three subpopulations
-categories <- rep(paste0(LETTERS[1:9], LETTERS[1:9]), each = 75)
-subpopulations <- rep(rep(c("Group 1", "Group 2", "Group 3"), each = 25), times = 9)
-
-# Generate data with single-peaked distributions within each subgroup
-values <- c(
-  rtruncnorm(25, a = 5, b = 10, mean = 6, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.5, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9, sd = 0.4),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.7, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.2, sd = 0.5),
-  rtruncnorm(25, a = 5, b = 10, mean = 5.8, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.4, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 8.9, sd = 0.6),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.1, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9.3, sd = 0.4),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.3, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.4, sd = 0.5),
-  rtruncnorm(25, a = 5, b = 10, mean = 5.9, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.5, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 9.2, sd = 0.6),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.4, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 7.9, sd = 0.4), rtruncnorm(25, a = 5, b = 10, mean = 9.5, sd = 0.4),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.0, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 7.6, sd = 0.5), rtruncnorm(25, a = 5, b = 10, mean = 9.3, sd = 0.5),
-  rtruncnorm(25, a = 5, b = 10, mean = 6.2, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 7.8, sd = 0.6), rtruncnorm(25, a = 5, b = 10, mean = 9.6, sd = 0.6)
-)
-
-# Create data frame
-df <- data.frame(Category = categories, Subpopulation = subpopulations, Value = values) %>%
-  mutate(ID = 1:nrow(.))    
+# View the data structure
+head(df)
+str(df)
 ```
 ### Data Visualization
 ```r
+library(ggplot2)
+library(MultiModalR)
+
+# Load the built-in dataset
+df <- MultiModalR::multimodal_dummy
+
 # Plot 01 ~ subpopulations/subgroups not shown
 ggplot(df, aes(x = Value)) +
   geom_density(color = NA, fill = "grey98", adjust = .8) +
