@@ -191,7 +191,7 @@ MultiModalR::plot_VALIDATION(
 ```
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_003.png" width="550">
 
-**Validation results show accurate subgroup assignment across categories.**
+**Validation results show accurate subgroup assignments across categories.**
 
 ### Generate Custom Data
 
