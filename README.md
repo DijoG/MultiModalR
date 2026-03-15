@@ -63,11 +63,8 @@ results <- fuss_PARALLEL_mcmc(
 summary(results)
 ```
 
-### Basic Usage
+### Parameters
 ```r
-library(MultiModalR)
-
-# Prepare data and run analysis
 MultiModalR::fuss_PARALLEL_mcmc(
   data = df,                  # -> required
   varCLASS = "Category",      # -> required
