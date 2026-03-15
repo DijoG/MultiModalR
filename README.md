@@ -1,7 +1,10 @@
-# MultiModalR 🏔️ <img src="https://latex.codecogs.com/svg.latex?\color{white}w_1\mathcal{N}(\mu_1,\sigma_1^2)+w_2\mathcal{N}(\mu_2,\sigma_2^2)+w_3\mathcal{N}(\mu_3,\sigma_3^2)" height="30" align="center">
+# MultiModalR 🏔️ 📊 🔬
 
 [![R](https://img.shields.io/badge/R-≥4.0-blue?style=for-the-badge&logo=r)](https://www.r-project.org/)
 [![C++](https://img.shields.io/badge/C++-RcppArmadillo-blue?style=for-the-badge&logo=cplusplus)](https://isocpp.org/)
+[![Bayesian](https://img.shields.io/badge/Bayesian-MCMC-green?style=for-the-badge)](https://en.wikipedia.org/wiki/Markov_chain_Monte_Carlo)
+
+<img src="https://latex.codecogs.com/svg.latex?\color{white}w_1\mathcal{N}(\mu_1,\sigma_1^2)+w_2\mathcal{N}(\mu_2,\sigma_2^2)+w_3\mathcal{N}(\mu_3,\sigma_3^2)" height="30" align="center">
 
 
 **MultiModalR** performs Bayesian mixture modeling for multimodal data. It detects subpopulations and assigns probabilistic memberships using two advanced Markov Chain Monte Carlo (MCMC) algorithms implemented in optimized C++:
@@ -10,18 +13,27 @@
 
 2. Dirichlet-Multinomial (collapsed Gibbs) - Slower and rigorously robust 
 
-## Features
+## 🎯 Features
+- **🚀 Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial (robustness)
+- **🔍 Enhanced Mode Detection**: Height-aware peak detection with four bandwidth methods
+- **📊 Bayesian Probability Assignment**: Soft assignment with probability estimates
+- **🎪 Subpopulation Detection**: Automatic detection of multimodal components
+- **⚡ Parallel Processing**: Built-in multi-core computation
+- **✅ Validation Tools**: Built-in plotting and validation functions
+- **🔄 Flexible Input**: Works with various data structures
+- **⚙️ Optimized C++ Core**: Blazing fast MCMC sampling with RcppArmadillo
 
-- **Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial
-- **Enhanced Mode Detection**: Height-aware peak detection with four bandwidth methods (SJ, nrd, bcv, ucv)
-- **Bayesian Probability Assignment**: Soft assignment with probability estimates
-- **Subpopulation Detection**: Automatic detection of multimodal components
-- **Parallel Processing**: Built-in multi-core computation for large datasets
-- **Validation Tools**: Built-in plotting and validation functions
-- **Flexible Input**: Works with various categorical data structures
-- **Optimized C++ Core**: Blazing fast MCMC sampling with RcppArmadillo
+## 📋 Prerequisites
 
-## Installation
+### Dependencies
+`Rcpp` 📦, `dplyr` 🔧, `furrr` 🔄, `future` ⏳
+
+### System Requirements
+- R ≥ 4.0
+- C++ compiler with C++11 support
+- Optional: Multiple CPU cores for parallel processing
+
+## 💾 Installation
 
 ### From GitHub
 ```r
@@ -31,11 +43,23 @@ devtools::install_github("DijoG/MultiModalR")
 # Or using remotes
 remotes::install_github("DijoG/MultiModalR")
 ```
-## Dependencies
 
-`Rcpp`, `dplyr`, `furrr`, `future`
+## 🚀 Quick Start Example
+```r
+library(MultiModalR)
+data(multimodal_dummy)
 
-## Quick Start
+# Run analysis with default settings
+results <- fuss_PARALLEL_mcmc(
+  data = multimodal_dummy,
+  varCLASS = "Category",
+  varY = "Value",
+  varID = "ID"
+)
+
+# View results summary
+summary(results)
+```
 
 ### Basic Usage
 ```r
@@ -60,7 +84,7 @@ MultiModalR::fuss_PARALLEL_mcmc(
   dirichlet_alpha = 2.0       # /default
 )
 ```
-## Detailed Example
+## 📚 Detailed Example
 
 ### Data
 
@@ -206,4 +230,4 @@ custom_data <- MultiModalR::create_multimodal_dummy(
 )
 ```
 
-**Happy multimoda(e)ling!** 🏔️
+**Happy multimoda(e)ling!** 🏔️️ 📊 🎯
