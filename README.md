@@ -103,10 +103,6 @@ str(df)
 ### Data Visualization
 ```r
 library(ggplot2)
-library(MultiModalR)
-
-# Load the built-in dataset
-df <- MultiModalR::multimodal_dummy
 
 # Plot 01 ~ subpopulations/subgroups not shown
 ggplot(df, aes(x = Value)) +
