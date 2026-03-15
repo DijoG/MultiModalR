@@ -47,11 +47,13 @@ remotes::install_github("DijoG/MultiModalR")
 ## 🚀 Quick Start Example
 ```r
 library(MultiModalR)
-data(multimodal_dummy)
+
+# Load data
+df <- MultiModalR::multimodal_dummy
 
 # Run analysis with default settings
 results <- fuss_PARALLEL_mcmc(
-  data = multimodal_dummy,
+  data = df,
   varCLASS = "Category",
   varY = "Value",
   varID = "ID"
