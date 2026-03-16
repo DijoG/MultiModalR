@@ -218,7 +218,7 @@ custom_data <- MultiModalR::create_multimodal_dummy(
   n_subgroups = 4
 )
 ```
-**Happy multimoda(e)ling!** 🏔️️ 📊 🎯
+### Happy multimoda(e)ling! 🏔️️ 📊 🎯
 
 ## 📝 Citation
 
