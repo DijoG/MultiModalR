@@ -63,21 +63,21 @@ summary(results)
 ## ⚙️ Parameters
 ```r
 MultiModalR::fuss_PARALLEL_mcmc(
-  data = df,                  # -> required
-  varCLASS = "Category",      # -> required
-  varY = "Value",             # -> required
-  varID = "ID",               # -> required
-  method = "sj-dpi",          # /default
-  within = 1,                 # /default
-  maxNGROUP = 5,              # /default
-  out_dir = ".../output",     # -> optional 
-  n_workers = 3,              # /default
-  n_iter = NULL,              # /default
-  burnin = NULL,              # /default
-  proposal_sd = 0.15,         # /default
-  sj_adjust = 0.5,            # /default
-  mcmc_method = "metropolis", # /default
-  dirichlet_alpha = 2.0       # /default
+  data = df,                  # 📦 -> required
+  varCLASS = "Category",      # 🏷️ -> required
+  varY = "Value",             # 📈 -> required
+  varID = "ID",               # 🆔 -> required
+  method = "sj-dpi",          # 📏 /default
+  within = 1,                 # 🎯 /default
+  maxNGROUP = 5,              # 🔢 /default
+  out_dir = ".../output",     # 💾 -> optional 
+  n_workers = 3,              # ⚡ /default
+  n_iter = NULL,              # 🔄 /default
+  burnin = NULL,              # 🔥 /default
+  proposal_sd = 0.15,         # 📊 /default
+  sj_adjust = 0.5,            # ⚖️ /default
+  mcmc_method = "metropolis", # 🧮 /default
+  dirichlet_alpha = 2.0       # 🎲 /default
 )
 ```
 ## 📚 Detailed Example
