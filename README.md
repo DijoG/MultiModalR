@@ -25,7 +25,7 @@
 
 ## 📋 Prerequisites
 
-### R Packege Dependencies
+### R Package Dependencies
 `Rcpp`, `RcppArmadillo`, `dplyr`, `furrr`, `future`
 
 ### System Requirements
