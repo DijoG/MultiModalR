@@ -14,7 +14,7 @@
 2. Dirichlet-Multinomial (collapsed Gibbs) - Slower and rigorously robust 
 
 ## 🎯 Features
-- **🚀 Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial (robustness)
+- **🚀 Dual MCMC algorithms**: Choose between Metropolis-Hastings (speed) or Dirichlet-Multinomial (robustness) depending on your data
 - **🔍 Enhanced Mode Detection**: Height-aware peak detection with four bandwidth methods
 - **📊 Bayesian Probability Assignment**: Soft assignment with probability estimates
 - **🎪 Subpopulation Detection**: Automatic detection of multimodal components
@@ -25,10 +25,10 @@
 
 ## 📋 Prerequisites
 
-### Dependencies
+Dependencies
 `Rcpp`, `dplyr`, `furrr`, `future`
 
-### System Requirements
+System Requirements
 - R ≥ 4.0
 - C++ compiler with C++11 support
 - Optional: Multiple CPU cores for parallel processing
@@ -84,9 +84,6 @@ MultiModalR::fuss_PARALLEL_mcmc(
 ## 📚 Detailed Example
 
 ### Data
-
-Dummy data is provided by the package.
-
 ```r
 library(MultiModalR)
 
@@ -160,7 +157,7 @@ MultiModalR::fuss_PARALLEL_mcmc(
 tictoc::toc()
 # Processing time: 5.19 sec (3 cores) ~ 91.4% overall accuracy
 
-# - OR -->
+# -- OR (recommended default) -->
 
 # Metropolis-Hastings within Gibbs Sampler for Gaussian Mixture Models 
 MultiModalR::fuss_PARALLEL_mcmc(
