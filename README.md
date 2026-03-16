@@ -30,7 +30,7 @@
 
 ### System Requirements
 - R ≥ 4.0 
-- Optional: Multiple CPU cores for parallel processing
+- Multiple CPU cores for parallel processing
 
 ## 💾 Installation
 ```r
