@@ -34,13 +34,11 @@
 - Optional: Multiple CPU cores for parallel processing
 
 ## 💾 Installation
-
-### From GitHub
 ```r
-# Install from GitHub
+# Either:
 devtools::install_github("DijoG/MultiModalR")
 
-# Or using remotes
+# Or:
 remotes::install_github("DijoG/MultiModalR")
 ```
 
@@ -224,5 +222,9 @@ custom_data <- MultiModalR::create_multimodal_dummy(
   n_subgroups = 4
 )
 ```
-
 **Happy multimoda(e)ling!** 🏔️️ 📊 🎯
+
+## Citation
+
+If you use **`MultiModalR`** in your research, please cite the original paper: 
+*after publication*
