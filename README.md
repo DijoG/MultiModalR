@@ -25,12 +25,11 @@
 
 ## 📋 Prerequisites
 
-Dependencies
-`Rcpp`, `dplyr`, `furrr`, `future`
+### R Packege Dependencies
+`Rcpp`, `RcppArmadillo`, `dplyr`, `furrr`, `future`
 
-System Requirements
-- R ≥ 4.0
-- C++ compiler with C++11 support
+### System Requirements
+- R ≥ 4.0 
 - Optional: Multiple CPU cores for parallel processing
 
 ## 💾 Installation
