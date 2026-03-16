@@ -26,7 +26,7 @@
 ## 📋 Prerequisites
 
 ### Dependencies
-`Rcpp` 📦, `dplyr` 🔧, `furrr` 🔄, `future` ⏳
+`Rcpp`, `dplyr`, `furrr`, `future`
 
 ### System Requirements
 - R ≥ 4.0
