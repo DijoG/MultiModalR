@@ -61,7 +61,7 @@ results <- fuss_PARALLEL_mcmc(
 summary(results)
 ```
 
-### Parameters
+## ⚙️ Parameters
 ```r
 MultiModalR::fuss_PARALLEL_mcmc(
   data = df,                  # -> required
@@ -224,7 +224,7 @@ custom_data <- MultiModalR::create_multimodal_dummy(
 ```
 **Happy multimoda(e)ling!** 🏔️️ 📊 🎯
 
-## Citation
+## 📝 Citation
 
-If you use **`MultiModalR`** in your research, please cite the original paper: 
+If you use **MultiModalR** in your research, please cite the original paper: 
 *after publication*
