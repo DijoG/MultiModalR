@@ -56,8 +56,12 @@ Rcpp::List MM_MH_cpp(const arma::vec& y,
   }
   
   // Shuffle to remove ordering bias
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  
   for(int i = n - 1; i > 0; --i) {
-    int j = std::rand() % (i + 1);
+    std::uniform_int_distribution<> dis(0, i);
+    int j = dis(gen);
     std::swap(z_current(i), z_current(j));
   }
   
@@ -410,8 +414,12 @@ Rcpp::List MM_MH_dirichlet_cpp(const arma::vec& y,
   }
   
   // Shuffle
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  
   for(int i = n - 1; i > 0; --i) {
-    int j = std::rand() % (i + 1);
+    std::uniform_int_distribution<> dis(0, i);
+    int j = dis(gen);
     std::swap(z_current(i), z_current(j));
   }
   
