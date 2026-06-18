@@ -18,7 +18,7 @@
 #' with overlapping but separable distributions, making it ideal for testing
 #' multimodal mixture modeling algorithms.
 #'
-#' @source Generated with set.seed(5) using rtruncnorm package
+#' @source Generated with \code{set.seed(5)} using \code{truncnorm::rtruncnorm()}. See \code{\link{create_multimodal_dummy}} for the generating function.
 #'
 #' @examples
 #' # Load the dataset
