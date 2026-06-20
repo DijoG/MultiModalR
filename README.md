@@ -35,7 +35,7 @@
 ## 💾 Installation
 ```r
 # Insatll from GitHub
-# devtools::install_github("DijoG/MultiModalR")
+devtools::install_github("DijoG/MultiModalR")
 ```
 
 ## 🚀 Quick Start Example
