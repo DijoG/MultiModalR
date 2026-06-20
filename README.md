@@ -34,10 +34,7 @@
 
 ## 💾 Installation
 ```r
-# Install from CRAN (recommended)
-install.packages("MultiModalR")
-
-# Or install the development version from GitHub
+# Insatll from GitHub
 # devtools::install_github("DijoG/MultiModalR")
 ```
 
