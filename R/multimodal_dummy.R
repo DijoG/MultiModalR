@@ -38,7 +38,7 @@
 #'   theme_dark()
 #' 
 #' # Use with MultiModalR
-#' \dontrun{
+#' \donttest{
 #' library(MultiModalR)
 #' results <- fuss_PARALLEL_mcmc(
 #'   data = multimodal_dummy,

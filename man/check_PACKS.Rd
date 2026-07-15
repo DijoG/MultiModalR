@@ -2,13 +2,13 @@
 % Please edit documentation in R/MultiModalR.R
 \name{check_PACKS}
 \alias{check_PACKS}
-\title{Check and install required packages}
+\title{Check if required packages are available}
 \usage{
 check_PACKS()
 }
 \value{
-Installs missing packages
+Invisibly returns TRUE if all packages are available
 }
 \description{
-Check and install required packages
+Check if required packages are available
 }

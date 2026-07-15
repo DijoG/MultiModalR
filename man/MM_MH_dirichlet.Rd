@@ -41,3 +41,16 @@ List with MCMC results (SAME FORMAT as MM_MH)
 \description{
 Dirichlet MCMC (identical interface to MM_MH)
 }
+\examples{
+\donttest{
+# Simulate data
+set.seed(123)
+y <- c(rnorm(50, 0, 1), rnorm(50, 5, 1))
+ids <- paste0("ID", 1:100)
+
+# Run Dirichlet MCMC
+result <- MM_MH_dirichlet(y, grp = 2, ids = ids, 
+                          n_iter = 100, burnin = 50)
+print(head(result$assigned_group))
+}
+}

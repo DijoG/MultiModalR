@@ -8,23 +8,23 @@
 #' @useDynLib MultiModalR, .registration = TRUE
 NULL
 
-#' Check and install required packages
+#' Check if required packages are available
 #' 
-#' @return Installs missing packages
+#' @return Invisibly returns TRUE if all packages are available
 #' @export
 check_PACKS <- function() {
   required_packages = c(
-    "tidyverse", "furrr", "future", "multimode", "Rcpp", "RcppArmadillo",
-    "truncnorm", "tictoc", "dplyr", "tidyr", "purrr", "readr", "ggplot2"
+    "ggplot2", "dplyr", "purrr", "readr", "tidyr"
   )
   
-  missing_packages = required_packages[!required_packages %in% installed.packages()]
+  missing_packages = required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
   
   if(length(missing_packages) > 0) {
-    message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
-    install.packages(missing_packages)
+    message("Missing packages: ", paste(missing_packages, collapse = ", "))
+    return(invisible(FALSE))
   } else {
-    message("All required packages are installed.")
+    message("All required packages are available.")
+    return(invisible(TRUE))
   }
 }
 
@@ -196,6 +196,17 @@ group_MODES_enhanced <- function(df, within = 0.1) {
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
 #' @param seed Random seed
 #' @return List with MCMC results
+#' @examples
+#' \donttest{
+#' # Simulate data
+#' set.seed(123)
+#' y <- c(rnorm(50, 0, 1), rnorm(50, 5, 1))
+#' ids <- paste0("ID", 1:100)
+#' 
+#' # Run MCMC
+#' result <- MM_MH(y, grp = 2, ids = ids, n_iter = 100, burnin = 50)
+#' print(head(result$assigned_group))
+#' }
 #' @export
 MM_MH <- function(y, grp, prior_means = NULL, ids,
                   n_iter = 1000, burnin = 500,
@@ -264,6 +275,18 @@ MM_MH <- function(y, grp, prior_means = NULL, ids,
 #' @param dirichlet_alpha Dirichlet concentration parameter
 #' @param seed Random seed
 #' @return List with MCMC results (SAME FORMAT as MM_MH)
+#' @examples
+#' \donttest{
+#' # Simulate data
+#' set.seed(123)
+#' y <- c(rnorm(50, 0, 1), rnorm(50, 5, 1))
+#' ids <- paste0("ID", 1:100)
+#' 
+#' # Run Dirichlet MCMC
+#' result <- MM_MH_dirichlet(y, grp = 2, ids = ids, 
+#'                           n_iter = 100, burnin = 50)
+#' print(head(result$assigned_group))
+#' }
 #' @export
 MM_MH_dirichlet <- function(y, grp, prior_means = NULL, ids,
                             n_iter = 5000, burnin = 2000,
@@ -428,6 +451,28 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param mcmc_method "metropolis" or "dirichlet"(default: "metropolis")
 #' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
 #' @return Data frame (if out_dir is NULL) or writes CSV files
+#' @examples
+#' \donttest{
+#' # Load example data
+#' data(multimodal_dummy)
+#' 
+#' # Run with default settings (fast for examples)
+#' results <- fuss_PARALLEL_mcmc(
+#'   data = multimodal_dummy,
+#'   varCLASS = "Category",
+#'   varY = "Value",
+#'   varID = "ID",
+#'   n_iter = 100,
+#'   burnin = 50,
+#'   n_workers = 1  # For CRAN checks
+#' )
+#' 
+#' # Print results
+#' print(head(results))
+#' 
+#' # Summary
+#' summary(results)
+#' }
 #' @export
 fuss_PARALLEL_mcmc <- function(data, 
                                varCLASS, 
@@ -633,18 +678,24 @@ fuss_PARALLEL_mcmc <- function(data,
     
     if(length(result_list) > 0) {
       combined_result = do.call(rbind, result_list)
-      message("Parallel analysis complete. Combined result has ", 
+      
+      # Create classed object
+      obj = list(
+        data = combined_result,
+        n_categories = length(result_list),
+        method = mcmc_method,
+        mode_method = method,
+        sj_adjust = sj_adjust,
+        within = within,
+        n_iter = n_iter,
+        burnin = burnin
+      )
+      class(obj) = "MultiModalR"
+      
+      message("Parallel analysis complete. Result has ", 
               nrow(combined_result), " rows.")
       
-      # Add method attribute
-      attr(combined_result, "mcmc_method") = mcmc_method
-      attr(combined_result, "mode_method") = method
-      attr(combined_result, "sj_adjust") = sj_adjust
-      
-      return(combined_result)
-    } else {
-      warning("No results were generated. Check your data and parameters.")
-      return(NULL)
+      return(obj)
     }
   }
   
@@ -668,12 +719,14 @@ plot_VALIDATION <- function(csv_dir, observed_df,
                             id_col = "ID",
                             pattern = "^df_") {
   
-  # Check required packages
+  # Check required packages - use requireNamespace instead of installed.packages()
   required = c("ggplot2", "dplyr", "readr", "purrr", "tidyr")
-  missing = required[!required %in% installed.packages()]
+  missing = required[!sapply(required, requireNamespace, quietly = TRUE)]
+  
   if(length(missing) > 0) {
-    stop("Missing packages: ", paste(missing, collapse = ", "),
-         "\nPlease install with: install.packages(c('", paste(missing, collapse = "', '"), "'))")
+    stop("Required packages are missing: ", paste(missing, collapse = ", "),
+         "\nPlease install them before using this function.",
+         call. = FALSE)
   }
   
   # Get list of CSV files
@@ -800,3 +853,40 @@ plot_VALIDATION <- function(csv_dir, observed_df,
   return(p)
 }
 
+#' MultiModalR Result Object
+#' 
+#' @param x A MultiModalR result object
+#' @param ... Additional arguments
+#' @export
+print.MultiModalR <- function(x, ...) {
+  cat("MultiModalR Mixture Model\n")
+  cat("==========================\n")
+  cat("Number of categories:", x$n_categories, "\n")
+  cat("Method:", x$method, "\n")
+  cat("Mode detection:", x$mode_method, "\n")
+  cat("MCMC iterations:", x$n_iter, "\n")
+  cat("Burn-in:", x$burnin, "\n")
+  cat("Data rows:", nrow(x$data), "\n")
+  invisible(x)
+}
+
+#' @export
+summary.MultiModalR <- function(object, ...) {
+  cat("MultiModalR Summary\n")
+  cat("===================\n")
+  cat("Categories:", object$n_categories, "\n")
+  cat("Method:", object$method, "\n")
+  cat("Mode detection:", object$mode_method, "\n")
+  cat("Total rows:", nrow(object$data), "\n")
+  cat("Parameters:\n")
+  cat("  sj_adjust:", object$sj_adjust, "\n")
+  cat("  within:", object$within, "\n")
+  cat("  n_iter:", object$n_iter, "\n")
+  cat("  burnin:", object$burnin, "\n")
+  
+  if("Assigned_Group" %in% names(object$data)) {
+    cat("\nAssignment summary:\n")
+    print(table(object$data$Assigned_Group))
+  }
+  invisible(object)
+}

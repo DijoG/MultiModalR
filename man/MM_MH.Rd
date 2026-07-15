@@ -38,3 +38,15 @@ List with MCMC results
 \description{
 Fast MCMC for mixture models (Metropolis-Hastings-within-partial-Gibbs)
 }
+\examples{
+\donttest{
+# Simulate data
+set.seed(123)
+y <- c(rnorm(50, 0, 1), rnorm(50, 5, 1))
+ids <- paste0("ID", 1:100)
+
+# Run MCMC
+result <- MM_MH(y, grp = 2, ids = ids, n_iter = 100, burnin = 50)
+print(head(result$assigned_group))
+}
+}

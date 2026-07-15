@@ -61,3 +61,26 @@ Performs multimodal probability assignment using either:
 1. Metropolis-Hastings-within-partial-Gibbs 
 2. Dirichlet-Multinomial
 }
+\examples{
+\donttest{
+# Load example data
+data(multimodal_dummy)
+
+# Run with default settings (fast for examples)
+results <- fuss_PARALLEL_mcmc(
+  data = multimodal_dummy,
+  varCLASS = "Category",
+  varY = "Value",
+  varID = "ID",
+  n_iter = 100,
+  burnin = 50,
+  n_workers = 1  # For CRAN checks
+)
+
+# Print results
+print(head(results))
+
+# Summary
+summary(results)
+}
+}

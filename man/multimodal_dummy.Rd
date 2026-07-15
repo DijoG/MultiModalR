@@ -16,7 +16,7 @@ A data frame with 675 rows and 4 variables:
 }
 }
 \source{
-Generated with set.seed(5) using rtruncnorm package
+Generated with \code{set.seed(5)} using \code{truncnorm::rtruncnorm()}. See \code{\link{create_multimodal_dummy}} for the generating function.
 }
 \usage{
 data(multimodal_dummy)
@@ -56,7 +56,7 @@ ggplot(multimodal_dummy, aes(x = Value, fill = Subpopulation)) +
   theme_dark()
 
 # Use with MultiModalR
-\dontrun{
+\donttest{
 library(MultiModalR)
 results <- fuss_PARALLEL_mcmc(
   data = multimodal_dummy,
