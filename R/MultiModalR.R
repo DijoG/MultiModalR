@@ -678,24 +678,18 @@ fuss_PARALLEL_mcmc <- function(data,
     
     if(length(result_list) > 0) {
       combined_result = do.call(rbind, result_list)
-      
-      # Create classed object
-      obj = list(
-        data = combined_result,
-        n_categories = length(result_list),
-        method = mcmc_method,
-        mode_method = method,
-        sj_adjust = sj_adjust,
-        within = within,
-        n_iter = n_iter,
-        burnin = burnin
-      )
-      class(obj) = "MultiModalR"
-      
-      message("Parallel analysis complete. Result has ", 
+      message("Parallel analysis complete. Combined result has ", 
               nrow(combined_result), " rows.")
       
-      return(obj)
+      # Add method attribute
+      attr(combined_result, "mcmc_method") = mcmc_method
+      attr(combined_result, "mode_method") = method
+      attr(combined_result, "sj_adjust") = sj_adjust
+      
+      return(combined_result)
+    } else {
+      warning("No results were generated. Check your data and parameters.")
+      return(NULL)
     }
   }
   
@@ -851,42 +845,4 @@ plot_VALIDATION <- function(csv_dir, observed_df,
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(alpha = .7)))
   
   return(p)
-}
-
-#' MultiModalR Result Object
-#' 
-#' @param x A MultiModalR result object
-#' @param ... Additional arguments
-#' @export
-print.MultiModalR <- function(x, ...) {
-  cat("MultiModalR Mixture Model\n")
-  cat("==========================\n")
-  cat("Number of categories:", x$n_categories, "\n")
-  cat("Method:", x$method, "\n")
-  cat("Mode detection:", x$mode_method, "\n")
-  cat("MCMC iterations:", x$n_iter, "\n")
-  cat("Burn-in:", x$burnin, "\n")
-  cat("Data rows:", nrow(x$data), "\n")
-  invisible(x)
-}
-
-#' @export
-summary.MultiModalR <- function(object, ...) {
-  cat("MultiModalR Summary\n")
-  cat("===================\n")
-  cat("Categories:", object$n_categories, "\n")
-  cat("Method:", object$method, "\n")
-  cat("Mode detection:", object$mode_method, "\n")
-  cat("Total rows:", nrow(object$data), "\n")
-  cat("Parameters:\n")
-  cat("  sj_adjust:", object$sj_adjust, "\n")
-  cat("  within:", object$within, "\n")
-  cat("  n_iter:", object$n_iter, "\n")
-  cat("  burnin:", object$burnin, "\n")
-  
-  if("Assigned_Group" %in% names(object$data)) {
-    cat("\nAssignment summary:\n")
-    print(table(object$data$Assigned_Group))
-  }
-  invisible(object)
 }
