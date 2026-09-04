@@ -334,7 +334,7 @@ Max R_hat	       < 1.1 (converged)
 | Maximum accuracy (synthetic data) | Stratified (`fuss_PARALLEL_mcmc`) | Higher accuracy on this benchmark |
 
 
-### Generate Custom Data
+## 📦 Generate Custom Data
 
 You can also generate custom multimodal data with different parameters:
 ```r
