@@ -1,21 +1,24 @@
 Package: MultiModalR
-Title: Fast Bayesian Probability Estimation for Multimodal Categorical Data
-Version: 1.0.0
-Date: 2026-06-18
+Title: Bayesian Mixture Modeling for Stratified and Hierarchical Multimodal Data
+Version: 1.1.0
+Date: 2026-08-29
 Authors@R: 
     person(given = "Gergo",
            family = "Dioszegi",
            role = c("aut", "cre"),
            email = "dijogergo@gmail.com",
            comment = c(ORCID = "0009-0003-3454-9093"))
-Description: Fast Bayesian probability estimation for multimodal categorical 
-    data using speed-optimized Markov chain Monte Carlo (MCMC) implementation 
-    (Metropolis-Hastings-within-partial-Gibbs).
-    The package provides efficient algorithms for detecting subpopulations, estimating
-    mixture components, and assigning observations to subgroups with probability estimates.
-    The methods are described in Dioszegi, G. et al. (2026) "Automatic Bayesian Mixture 
-    Modeling for Multimodal Categorical Data via Integrated Mode Detection and 
-    Metropolis-Hastings-within-Gibbs Sampling" (submitted to Journal of Statistical Software).
+Description: Fast Bayesian probability estimation for multimodal continuous 
+    data using speed-optimized Markov chain Monte Carlo (MCMC) implementation.
+    The package provides two complementary approaches: (1) stratified mixture 
+    modeling with independent fits per category (fuss_PARALLEL_mcmc), and 
+    (2) a unified hierarchical mixture model with category-specific parameters 
+    and shared number of components (fuss_COVARIATE_mcmc). Both approaches
+    detect subpopulations, estimate mixture components, and assign observations 
+    to subgroups with probability estimates.
+    The methods are described in Dioszegi, G. et al. (2026) "Automatic Bayesian 
+    Mixture Modeling for Multimodal Categorical Data via Integrated Mode Detection 
+    and Metropolis-Hastings-within-Gibbs Sampling" (submitted).
 License: MIT + file LICENSE
 URL: https://github.com/DijoG/MultiModalR
 BugReports: https://github.com/DijoG/MultiModalR/issues

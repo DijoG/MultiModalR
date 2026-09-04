@@ -11,5 +11,16 @@ export(create_MM_output)
 export(MM_MH)
 export(MM_MH_dirichlet)
 export(fuss_PARALLEL_mcmc)
+export(fuss_COVARIATE_mcmc)
 export(plot_VALIDATION)
 export(create_multimodal_dummy)
+
+# S3 methods for fuss_COVARIATE_mcmc
+S3method(print, fuss_COVARIATE_mcmc)
+S3method(summary, fuss_COVARIATE_mcmc)
+S3method(plot, fuss_COVARIATE_mcmc)
+
+# MCMC diagnostics
+export(effective_sample_size)
+export(gelman_rubin)
+export(check_convergence)

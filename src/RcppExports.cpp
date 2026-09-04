@@ -11,6 +11,28 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// run_MH_covariates
+Rcpp::List run_MH_covariates(const arma::vec& y, const arma::ivec& category, const arma::mat& prior_means, int K, int n_iter, int burnin, double proposal_sd, double alpha0, double beta0, double alpha_dirichlet, int seed, bool adaptive);
+RcppExport SEXP _MultiModalR_run_MH_covariates(SEXP ySEXP, SEXP categorySEXP, SEXP prior_meansSEXP, SEXP KSEXP, SEXP n_iterSEXP, SEXP burninSEXP, SEXP proposal_sdSEXP, SEXP alpha0SEXP, SEXP beta0SEXP, SEXP alpha_dirichletSEXP, SEXP seedSEXP, SEXP adaptiveSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::vec& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const arma::ivec& >::type category(categorySEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type prior_means(prior_meansSEXP);
+    Rcpp::traits::input_parameter< int >::type K(KSEXP);
+    Rcpp::traits::input_parameter< int >::type n_iter(n_iterSEXP);
+    Rcpp::traits::input_parameter< int >::type burnin(burninSEXP);
+    Rcpp::traits::input_parameter< double >::type proposal_sd(proposal_sdSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha0(alpha0SEXP);
+    Rcpp::traits::input_parameter< double >::type beta0(beta0SEXP);
+    Rcpp::traits::input_parameter< double >::type alpha_dirichlet(alpha_dirichletSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type adaptive(adaptiveSEXP);
+    rcpp_result_gen = Rcpp::wrap(run_MH_covariates(y, category, prior_means, K, n_iter, burnin, proposal_sd, alpha0, beta0, alpha_dirichlet, seed, adaptive));
+    return rcpp_result_gen;
+END_RCPP
+}
 // MM_MH_cpp
 Rcpp::List MM_MH_cpp(const arma::vec& y, const arma::vec& prior_means, int n_iter, int burnin, double proposal_sd, int seed);
 RcppExport SEXP _MultiModalR_MM_MH_cpp(SEXP ySEXP, SEXP prior_meansSEXP, SEXP n_iterSEXP, SEXP burninSEXP, SEXP proposal_sdSEXP, SEXP seedSEXP) {
@@ -46,6 +68,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_MultiModalR_run_MH_covariates", (DL_FUNC) &_MultiModalR_run_MH_covariates, 12},
     {"_MultiModalR_MM_MH_cpp", (DL_FUNC) &_MultiModalR_MM_MH_cpp, 6},
     {"_MultiModalR_MM_MH_dirichlet_cpp", (DL_FUNC) &_MultiModalR_MM_MH_dirichlet_cpp, 7},
     {NULL, NULL, 0}

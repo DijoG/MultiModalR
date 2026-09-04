@@ -1,7 +1,6 @@
 # MULTIMODALR - Fast Bayesian Probability Estimation for Multimodal Categorical Data
 # Version: 1.0.0
 # Speed-optimized MCMC implementation (Metropolis-Hastings-within-partial-Gibbs and Dirichlet-Multinomial)
-# Based on MINLAM (depreciated) by Gergő Diószegi
 
 #' @import Rcpp
 #' @importFrom Rcpp evalCpp
@@ -447,32 +446,10 @@ create_MM_output <- function(mcmc_result, y_original = NULL,
 #' @param n_iter Number of MCMC iterations (default: 6000 for metropolis, 3000 for dirichlet)
 #' @param burnin Burn-in period (default: 2000 for metropolis, 1000 for dirichlet)
 #' @param proposal_sd Proposal standard deviation for component means (default: 0.15)
-#' @param sj_adjust Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)
-#' @param mcmc_method "metropolis" or "dirichlet"(default: "metropolis")
+#' @param sj_adjust Adjustment factor for bandwidth methods (default: 0.5)
+#' @param mcmc_method "metropolis" or "dirichlet" (default: "metropolis")
 #' @param dirichlet_alpha Dirichlet concentration parameter (default: 2.0)
-#' @return Data frame (if out_dir is NULL) or writes CSV files
-#' @examples
-#' \donttest{
-#' # Load example data
-#' data(multimodal_dummy)
-#' 
-#' # Run with default settings (fast for examples)
-#' results <- fuss_PARALLEL_mcmc(
-#'   data = multimodal_dummy,
-#'   varCLASS = "Category",
-#'   varY = "Value",
-#'   varID = "ID",
-#'   n_iter = 100,
-#'   burnin = 50,
-#'   n_workers = 1  # For CRAN checks
-#' )
-#' 
-#' # Print results
-#' print(head(results))
-#' 
-#' # Summary
-#' summary(results)
-#' }
+#' @return Data frame (ALWAYS returns combined data frame, even when writing CSV)
 #' @export
 fuss_PARALLEL_mcmc <- function(data, 
                                varCLASS, 
@@ -527,7 +504,7 @@ fuss_PARALLEL_mcmc <- function(data,
           ", sj_adjust = ", sj_adjust,
           ", within = ", within)
   
-  # Define processing function
+  # Define processing function (RETURNS the output data frame)
   process_category <- function(cat_data, varCLASS, varY, varID,
                                method, within, maxNGROUP, out_dir,
                                n_iter, burnin, proposal_sd, sj_adjust,
@@ -635,9 +612,9 @@ fuss_PARALLEL_mcmc <- function(data,
       filepath = file.path(out_dir, filename)
       write.csv(output_df, filepath, row.names = FALSE, quote = TRUE)
       message("  Written: ", filepath)
-      return(NULL)
     }
     
+    # ALWAYS RETURN the output data frame
     return(output_df)
   }
   
@@ -672,29 +649,30 @@ fuss_PARALLEL_mcmc <- function(data,
   # Reset to sequential
   future::plan(future::sequential)
   
-  # If out_dir is NULL, combine and return results
-  if(is.null(out_dir)) {
-    result_list = result_list[!sapply(result_list, is.null)]
-    
-    if(length(result_list) > 0) {
-      combined_result = do.call(rbind, result_list)
-      message("Parallel analysis complete. Combined result has ", 
-              nrow(combined_result), " rows.")
-      
-      # Add method attribute
-      attr(combined_result, "mcmc_method") = mcmc_method
-      attr(combined_result, "mode_method") = method
-      attr(combined_result, "sj_adjust") = sj_adjust
-      
-      return(combined_result)
-    } else {
-      warning("No results were generated. Check your data and parameters.")
-      return(NULL)
-    }
-  }
+  # Combine results
+  result_list = result_list[!sapply(result_list, is.null)]
   
-  message("Analysis complete. Results written to: ", out_dir)
-  return(invisible(NULL))
+  if(length(result_list) > 0) {
+    combined_result = do.call(rbind, result_list)
+    message("Parallel analysis complete. Combined result has ", 
+            nrow(combined_result), " rows.")
+    
+    # Add method attributes
+    attr(combined_result, "mcmc_method") = mcmc_method
+    attr(combined_result, "mode_method") = method
+    attr(combined_result, "sj_adjust") = sj_adjust
+    
+    # Also return when out_dir is not NULL
+    if(!is.null(out_dir)) {
+      message("Results also written to: ", out_dir)
+    }
+    
+    return(combined_result)
+    
+  } else {
+    warning("No results were generated. Check your data and parameters.")
+    return(NULL)
+  }
 }
 
 #' Plot validation of subgroup assignments (handles both balanced and imbalanced data)

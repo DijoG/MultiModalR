@@ -47,40 +47,17 @@ fuss_PARALLEL_mcmc(
 
 \item{proposal_sd}{Proposal standard deviation for component means (default: 0.15)}
 
-\item{sj_adjust}{Adjustment factor for bandwidth methods (default: 0.5, smaller -> more modes, higher -> fewer modes)}
+\item{sj_adjust}{Adjustment factor for bandwidth methods (default: 0.5)}
 
-\item{mcmc_method}{"metropolis" or "dirichlet"(default: "metropolis")}
+\item{mcmc_method}{"metropolis" or "dirichlet" (default: "metropolis")}
 
 \item{dirichlet_alpha}{Dirichlet concentration parameter (default: 2.0)}
 }
 \value{
-Data frame (if out_dir is NULL) or writes CSV files
+Data frame (ALWAYS returns combined data frame, even when writing CSV)
 }
 \description{
 Performs multimodal probability assignment using either:
 1. Metropolis-Hastings-within-partial-Gibbs 
 2. Dirichlet-Multinomial
-}
-\examples{
-\donttest{
-# Load example data
-data(multimodal_dummy)
-
-# Run with default settings (fast for examples)
-results <- fuss_PARALLEL_mcmc(
-  data = multimodal_dummy,
-  varCLASS = "Category",
-  varY = "Value",
-  varID = "ID",
-  n_iter = 100,
-  burnin = 50,
-  n_workers = 1  # For CRAN checks
-)
-
-# Print results
-print(head(results))
-
-# Summary
-summary(results)
-}
 }

@@ -652,6 +652,10 @@
 # define __FLT64X_NORM_MAX__ 1.18973149535723176502126385303097021e+4932F64x
 #endif
 
+#ifndef __SIZEOF_POINTER__
+# define __SIZEOF_POINTER__ 8
+#endif
+
 #ifndef __SIZE_TYPE__
 # define __SIZE_TYPE__ long long unsigned int
 #endif
@@ -694,10 +698,6 @@
 
 #ifndef __cdecl
 # define __cdecl __attribute__((__cdecl__))
-#endif
-
-#ifndef __INTPTR_MAX__
-# define __INTPTR_MAX__ 0x7fffffffffffffffLL
 #endif
 
 #ifndef __LDBL_HAS_INFINITY__
@@ -1024,8 +1024,8 @@
 # define __FLT128_MAX__ 1.18973149535723176508575932662800702e+4932F128
 #endif
 
-#ifndef __SIZEOF_POINTER__
-# define __SIZEOF_POINTER__ 8
+#ifndef __INTPTR_MAX__
+# define __INTPTR_MAX__ 0x7fffffffffffffffLL
 #endif
 
 #ifndef __FLT64_HAS_QUIET_NAN__
