@@ -276,14 +276,15 @@ plot_VALIDATION(
 ## 📊 Performance Comparison
 
 ### Accuracy Metrics
-```text
-Metric	                    Stratified	        Hierarchical
-Overall Accuracy	          92.6%	              90.7%
-Mean Per-Category Accuracy	92.6%	              90.7%
-Runtime	                    12.59s (parallel)	  104.11s (single chain)
-Parallel Processing	        ✅ Yes (3 cores)	  ❌ No
-Convergence Diagnostics   	❌ No	            ✅ Yes (ESS, R_hat)
-```
+| **Aspect** | **Stratified** | **Hierarchical** | **Winner** |
+|:---|:---:|:---:|:---:|
+| **Accuracy** | **92.6%** | 90.7% | 🏆 Stratified |
+| **Speed** | **12.59s** | 104.11s | 🏆 Stratified |
+| **Parallel** | ✅ Yes | ❌ No | 🏆 Stratified |
+| **Convergence Diagnostics** | ❌ No | ✅ Yes | 🏆 Hierarchical |
+| **Information Borrowing** | ❌ No | ✅ Yes | 🏆 Hierarchical |
+| **Best For** | Exploratory, speed | Publication, small categories | — |
+
 ### Confusion Matrix
 
 Stratified Model:
@@ -301,22 +302,23 @@ Hierarchical Model:
   3          0      24     215
 ```
 ### Per-Category Accuracy
-```text
-Category	Stratified	Hierarchical	Difference
-AA	       93.3%	     92.0%	      -1.3%
-BB	       92.0%	     89.3%	      -2.7%
-CC	       82.7%	     78.7%	      -4.0%
-DD	      100.0%	    100.0%	       0.0%
-EE	       94.7%	     93.3%	      -1.3%
-FF	       85.3%	     82.7%	      -2.7%
-GG	      100.0%	     97.3%	      -2.7%
-HH	       94.7%	     94.7%	       0.0%
-II	       90.7%	     88.0%	      -2.7%
-```
+| Category | Stratified | Hierarchical | Difference |
+|:---|:---:|:---:|:---:|
+| AA | 93.3% | 92.0% | ⬇️ -1.3% |
+| BB | 92.0% | 89.3% | ⬇️ -2.7% |
+| CC | 82.7% | 78.7% | ⬇️ -4.0% |
+| DD | 🏆 **100.0%** | 🏆 **100.0%** | ➖ 0.0% |
+| EE | 94.7% | 93.3% | ⬇️ -1.3% |
+| FF | 85.3% | 82.7% | ⬇️ -2.7% |
+| GG | 🏆 **100.0%** | 97.3% | ⬇️ -2.7% |
+| HH | 94.7% | 94.7% | ➖ 0.0% |
+| II | 90.7% | 88.0% | ⬇️ -2.7% |
+| **Mean** | **🏆 92.6%** | **90.7%** | **⬇️ -1.9%** |
+
 ### MCMC Convergence Diagnostics (Hierarchical Model)
 ```text
 Metric	         Value
-Min ESS	         141
+Min ESS	          141
 Mean ESS	       253
 Max R_hat	       < 1.1 (converged)
 ```
