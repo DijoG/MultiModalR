@@ -225,7 +225,7 @@ ess <- check_convergence(result)
 ```
 ### Output 
 
-The function generates:
+Both functions generate:
   - **Data CSV** files: Original data with assigned subgroups and probabilities
   
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="550">
