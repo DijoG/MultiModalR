@@ -30,9 +30,9 @@ fuss_COVARIATE_mcmc(
 
 \item{varCLASS}{Name of the categorical grouping variable.}
 
-\item{varID}{Optional name of the ID variable (for tracking observations).}
+\item{varID}{Optional name of the ID variable.}
 
-\item{K}{Optional number of components. If NULL, auto-detected per category.}
+\item{K}{Optional vector of K per category. If NULL, auto-detected.}
 
 \item{n_iter}{Number of MCMC iterations (default: 10000).}
 
@@ -57,39 +57,10 @@ fuss_COVARIATE_mcmc(
 \item{seed}{Random seed (default: 123).}
 }
 \value{
-A list with components:
-  \item{y}{Original response values.}
-  \item{ID}{Observation identifiers.}
-  \item{Main_Class}{Original categorical variable.}
-  \item{prob_matrix}{Data frame with per-observation component probabilities.}
-  \item{Assigned_Group}{Most likely component assignment.}
-  \item{Min_Assigned}{Minimum value of assigned range.}
-  \item{Max_Assigned}{Maximum value of assigned range.}
-  \item{Mean_Assigned}{Mean value of assigned range.}
-  \item{Mode_Assigned}{Mode of assigned range.}
-  \item{mu}{Posterior mean of category-specific means (C x K matrix).}
-  \item{sigma2}{Posterior mean of category-specific variances (C x K matrix).}
-  \item{pi}{Posterior mean of category-specific weights (C x K matrix).}
-  \item{K}{Number of components.}
-  \item{C}{Number of categories.}
-  \item{category_levels}{Levels of the categorical variable.}
-  \item{mcmc_samples}{Full MCMC samples (for diagnostics).}
-  \item{data, varY, varCLASS, call}{Metadata for reproducibility.}
+A list with components.
 }
 \description{
-Fits a Bayesian Gaussian mixture model where the number of components K
-is shared across categories, but each category has its own means,
-variances, and mixing weights. This is a true mixture model that treats
-the categorical variable as a covariate.
-}
-\examples{
-\dontrun{
-library(MultiModalR)
-df <- multimodal_dummy
-result <- fuss_COVARIATE_mcmc(df, "Value", "Category", K = 3)
-summary(result)
-plot(result)
-head(result$prob_matrix)
-table(result$Assigned_Group, df$Subpopulation)
-}
+Fits a Bayesian Gaussian mixture model where each category can have
+a different number of components (K_c), while sharing information
+across categories for means and variances.
 }
