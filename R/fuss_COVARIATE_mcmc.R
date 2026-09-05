@@ -6,12 +6,16 @@
 
 #' Unified Bayesian Mixture Model with Category-Specific Parameters
 #'
+#' Fits a Bayesian Gaussian mixture model where the number of components K
+#' is shared across categories, but each category has its own means,
+#' variances, and mixing weights. This is a true mixture model that treats
+#' the categorical variable as a covariate.
+#'
 #' @param data Data frame containing the variables.
 #' @param varY Name of the continuous response variable.
 #' @param varCLASS Name of the categorical grouping variable.
-#' @param varID Optional name of the ID variable.
-#' @param K Optional number of components. If NULL, auto-detected.
-#' @param out_dir Optional output directory for CSV files.
+#' @param varID Optional name of the ID variable (for tracking observations).
+#' @param K Optional number of components. If NULL, auto-detected per category.
 #' @param n_iter Number of MCMC iterations (default: 10000).
 #' @param burnin Number of burn-in iterations (default: 2000).
 #' @param proposal_sd Proposal standard deviation (default: 0.15).
@@ -24,7 +28,35 @@
 #' @param within Merging radius (default: 1.0).
 #' @param seed Random seed (default: 123).
 #'
-#' @return A list with components.
+#' @return A list with components:
+#'   \item{y}{Original response values.}
+#'   \item{ID}{Observation identifiers.}
+#'   \item{Main_Class}{Original categorical variable.}
+#'   \item{prob_matrix}{Data frame with per-observation component probabilities.}
+#'   \item{Assigned_Group}{Most likely component assignment.}
+#'   \item{Min_Assigned}{Minimum value of assigned range.}
+#'   \item{Max_Assigned}{Maximum value of assigned range.}
+#'   \item{Mean_Assigned}{Mean value of assigned range.}
+#'   \item{Mode_Assigned}{Mode of assigned range.}
+#'   \item{mu}{Posterior mean of category-specific means (C x K matrix).}
+#'   \item{sigma2}{Posterior mean of category-specific variances (C x K matrix).}
+#'   \item{pi}{Posterior mean of category-specific weights (C x K matrix).}
+#'   \item{K}{Number of components.}
+#'   \item{C}{Number of categories.}
+#'   \item{category_levels}{Levels of the categorical variable.}
+#'   \item{mcmc_samples}{Full MCMC samples (for diagnostics).}
+#'   \item{data, varY, varCLASS, call}{Metadata for reproducibility.}
+#'
+#' @examples
+#' \dontrun{
+#' library(MultiModalR)
+#' df <- multimodal_dummy
+#' result <- fuss_COVARIATE_mcmc(df, "Value", "Category", K = 3)
+#' summary(result)
+#' plot(result)
+#' head(result$prob_matrix)
+#' table(result$Assigned_Group, df$Subpopulation)
+#' }
 #' @export
 fuss_COVARIATE_mcmc <- function(
     data,
@@ -32,7 +64,6 @@ fuss_COVARIATE_mcmc <- function(
     varCLASS,
     varID = NULL,
     K = NULL,
-    out_dir = NULL,
     n_iter = 10000,
     burnin = 2000,
     proposal_sd = 0.15,
@@ -50,54 +81,66 @@ fuss_COVARIATE_mcmc <- function(
   if (!varY %in% names(data)) stop("'varY' not found in data")
   if (!varCLASS %in% names(data)) stop("'varCLASS' not found in data")
   
-  y <- data[[varY]]
-  category <- data[[varCLASS]]
+  y = data[[varY]]
+  category = data[[varCLASS]]
   if (!is.numeric(y)) stop("'varY' must be numeric")
   
   # Convert category to numeric (0-based for C++)
-  cat_factor <- as.factor(category)
-  C <- nlevels(cat_factor)
-  cat_numeric <- as.numeric(cat_factor) - 1
+  cat_factor = as.factor(category)
+  C = nlevels(cat_factor)
+  cat_numeric = as.numeric(cat_factor) - 1
   
-  # ---- Determine K using enhanced mode detection ----
+  # ---- FIX: Detect K PER CATEGORY, not globally ----
   if (is.null(K)) {
-    global_modes_list <- get_MODES_enhanced(y, adjust = sj_adjust, threshold = 1.0)
-    modes_df <- global_modes_list[[method]]
-    
-    if (!is.null(modes_df) && nrow(modes_df) > 0) {
-      grouped_modes <- group_MODES_enhanced(modes_df, within = within)
-      K_candidate <- length(grouped_modes$Est_Mode)
-      K <- max(2, K_candidate)
-      message("Detected K = ", K, " components (using ", method, " bandwidth).")
-    } else {
-      K <- 3
-      message("Mode detection failed. Using K = 3 (fallback).")
+    # Detect K for each category separately
+    K_per_category = numeric(C)
+    for (c in 1:C) {
+      y_c = y[cat_numeric == (c - 1)]
+      if (length(y_c) > 5) {
+        cat_modes_list = get_MODES_enhanced(y_c, adjust = sj_adjust, threshold = 1.0)
+        modes_df = cat_modes_list[[method]]
+        if (!is.null(modes_df) && nrow(modes_df) > 0) {
+          grouped_modes = group_MODES_enhanced(modes_df, within = within)
+          K_per_category[c] = max(2, length(grouped_modes$Est_Mode))
+        } else {
+          K_per_category[c] = 3
+        }
+      } else {
+        K_per_category[c] = 2
+      }
     }
+    # Use the median K across categories (or max, or mode)
+    K = max(2, as.integer(median(K_per_category)))
+    message("Detected K = ", K, " components (median across categories using ", method, " bandwidth).")
   }
   
   # ---- Build prior means matrix (C x K) ----
-  prior_means <- matrix(NA, C, K)
+  prior_means = matrix(NA, C, K)
   for (c in 1:C) {
-    y_c <- y[cat_numeric == (c - 1)]
-    cat_modes_list <- get_MODES_enhanced(y_c, adjust = sj_adjust, threshold = 1.0)
-    modes_df <- cat_modes_list[[method]]
-    
-    if (!is.null(modes_df) && nrow(modes_df) > 0) {
-      grouped_modes <- group_MODES_enhanced(modes_df, within = within)
-      modes <- grouped_modes$Est_Mode
+    y_c = y[cat_numeric == (c - 1)]
+    if (length(y_c) > 5) {
+      cat_modes_list = get_MODES_enhanced(y_c, adjust = sj_adjust, threshold = 1.0)
+      modes_df = cat_modes_list[[method]]
+      
+      if (!is.null(modes_df) && nrow(modes_df) > 0) {
+        grouped_modes = group_MODES_enhanced(modes_df, within = within)
+        modes = grouped_modes$Est_Mode
+      } else {
+        modes = quantile(y_c, probs = seq(0.2, 0.8, length.out = K))
+      }
     } else {
-      modes <- quantile(y_c, probs = seq(0.2, 0.8, length.out = K))
+      modes = quantile(y_c, probs = seq(0.2, 0.8, length.out = K))
     }
     
     if (length(modes) >= K) {
-      prior_means[c, ] <- sort(modes[1:K])
+      prior_means[c, ] = sort(modes[1:K])
     } else {
-      prior_means[c, ] <- quantile(y_c, probs = seq(0.1, 0.9, length.out = K))
+      prior_means[c, ] = quantile(y_c, probs = seq(0.1, 0.9, length.out = K))
     }
   }
   
   # ---- Call C++ sampler ----
-  cpp_result <- MultiModalR:::run_MH_covariates(
+  cpp_result = MultiModalR:::run_MH_covariates(
     y = y,
     category = cat_numeric,
     prior_means = prior_means,
@@ -113,78 +156,93 @@ fuss_COVARIATE_mcmc <- function(
   )
   
   # ---- Post-process ----
-  mu_samples <- cpp_result$mu
-  sigma2_samples <- cpp_result$sigma2
-  pi_samples <- cpp_result$pi
-  z_samples <- cpp_result$z
+  mu_samples = cpp_result$mu
+  sigma2_samples = cpp_result$sigma2
+  pi_samples = cpp_result$pi
+  z_samples = cpp_result$z
   
-  N <- length(y)
-  N_samples <- dim(mu_samples)[3]
+  N = length(y)
+  N_samples = dim(mu_samples)[3]
   
   # Posterior means
-  mu_mean <- apply(mu_samples, c(1, 2), mean)
-  sigma2_mean <- apply(sigma2_samples, c(1, 2), mean)
-  pi_mean <- apply(pi_samples, c(1, 2), mean)
+  mu_mean = apply(mu_samples, c(1, 2), mean)
+  sigma2_mean = apply(sigma2_samples, c(1, 2), mean)
+  pi_mean = apply(pi_samples, c(1, 2), mean)
   
   # Most likely assignment (mode across samples)
-  assignments <- apply(z_samples, 1, function(x) {
-    tab <- table(x)
+  assignments = apply(z_samples, 1, function(x) {
+    tab = table(x)
     as.numeric(names(tab)[which.max(tab)])
   })
   
   # ---- Compute per-observation probability matrix ----
-  prob_matrix <- matrix(0, N, K)
+  prob_matrix = matrix(0, N, K)
   
   for (s in 1:N_samples) {
-    # Extract slices - handle case where C=1 (vector) or C>1 (matrix)
-    mu_s <- mu_samples[, , s]
-    sigma2_s <- sigma2_samples[, , s]
-    pi_s <- pi_samples[, , s]
+    mu_s = mu_samples[, , s]
+    sigma2_s = sigma2_samples[, , s]
+    pi_s = pi_samples[, , s]
     
-    # Ensure they are matrices with proper dimensions
     if (is.vector(mu_s)) {
-      mu_s <- matrix(mu_s, nrow = C, ncol = K)
+      mu_s = matrix(mu_s, nrow = C, ncol = K)
     }
     if (is.vector(sigma2_s)) {
-      sigma2_s <- matrix(sigma2_s, nrow = C, ncol = K)
+      sigma2_s = matrix(sigma2_s, nrow = C, ncol = K)
     }
     if (is.vector(pi_s)) {
-      pi_s <- matrix(pi_s, nrow = C, ncol = K)
+      pi_s = matrix(pi_s, nrow = C, ncol = K)
     }
     
-    # Compute probabilities for each observation
     for (i in 1:N) {
-      c_idx <- cat_numeric[i] + 1  # 1-based category index
+      c_idx = cat_numeric[i] + 1
       for (k in 1:K) {
-        prob_matrix[i, k] <- prob_matrix[i, k] + 
+        prob_matrix[i, k] = prob_matrix[i, k] + 
           pi_s[c_idx, k] * dnorm(y[i], mu_s[c_idx, k], sqrt(sigma2_s[c_idx, k]))
       }
     }
   }
   
-  # Normalize
-  prob_matrix <- prob_matrix / N_samples
-  row_sums <- rowSums(prob_matrix)
+  prob_matrix = prob_matrix / N_samples
+  row_sums = rowSums(prob_matrix)
   if (any(row_sums == 0)) {
-    prob_matrix <- prob_matrix + 1e-10
-    row_sums <- rowSums(prob_matrix)
+    prob_matrix = prob_matrix + 1e-10
+    row_sums = rowSums(prob_matrix)
   }
-  prob_matrix <- prob_matrix / row_sums
+  prob_matrix = prob_matrix / row_sums
   
-  colnames(prob_matrix) <- paste0("Group_", 1:K)
-  prob_df <- as.data.frame(prob_matrix)
+  colnames(prob_matrix) = paste0("Group_", 1:K)
+  prob_df = as.data.frame(prob_matrix)
+  
+  # ---- Compute group statistics ----
+  min_assigned = numeric(N)
+  max_assigned = numeric(N)
+  mean_assigned = numeric(N)
+  mode_assigned = numeric(N)
+  
+  for (k in 1:K) {
+    idx = assignments == k
+    if (sum(idx) > 0) {
+      y_k = y[idx]
+      min_assigned[idx] = min(y_k)
+      max_assigned[idx] = max(y_k)
+      mean_assigned[idx] = mean(y_k)
+      # Simple mode estimation
+      dens = density(y_k, n = 128)
+      mode_assigned[idx] = dens$x[which.max(dens$y)]
+    }
+  }
   
   # ---- Build output ----
-  out <- list(
+  out = list(
     y = y,
     ID = if (!is.null(varID)) data[[varID]] else 1:N,
     Main_Class = data[[varCLASS]],
     prob_matrix = prob_df,
     Assigned_Group = assignments,
-    Min_Assigned = NA_real_,
-    Max_Assigned = NA_real_,
-    Mean_Assigned = NA_real_,
-    Mode_Assigned = NA_real_,
+    Min_Assigned = min_assigned,
+    Max_Assigned = max_assigned,
+    Mean_Assigned = mean_assigned,
+    Mode_Assigned = mode_assigned,
     mu = mu_mean,
     sigma2 = sigma2_mean,
     pi = pi_mean,
@@ -203,7 +261,7 @@ fuss_COVARIATE_mcmc <- function(
     call = match.call()
   )
   
-  class(out) <- "fuss_COVARIATE_mcmc"
+  class(out) = "fuss_COVARIATE_mcmc"
   return(out)
 }
 
