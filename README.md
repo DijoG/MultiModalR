@@ -69,7 +69,6 @@ result <- fuss_COVARIATE_mcmc(
   varY = "Value",
   varCLASS = "Category",
   K = 3,                    # Auto-detected if NULL
-  out_dir = "output",       # Auto-writes CSV files
   n_iter = 10000,
   burnin = 2000
 )
@@ -112,7 +111,6 @@ MultiModalR::fuss_COVARIATE_mcmc(
   varCLASS = "Category",      # 🏷️ -> required
   varID = "ID",               # 🆔 -> optional
   K = NULL,                   # 🔢 auto-detected
-  out_dir = NULL,             # 💾 -> optional (auto-writes CSV)
   n_iter = 10000,             # 🔄 /default
   burnin = 2000,              # 🔥 /default
   proposal_sd = 0.15,         # 📊 /default
@@ -225,7 +223,7 @@ ess <- check_convergence(result)
 ```
 ### Output 
 
-Both functions generate:
+The stratified model `fuss_PARALLEL_mcmc()` generates:
   - **Data CSV** files: Original data with assigned subgroups and probabilities
   
 <img align="bottom" src="https://raw.githubusercontent.com/DijoG/storage/main/MMR/MMR_csv.png" width="550">
@@ -244,6 +242,8 @@ A **Data CSV** file consists of the following fields (maxNGROUP = 5):
   - `Mean_Assigned`: Mean value of the assigned/predicted range
   - `Mode_Assigned`: Mode of the assigned/predicted range
   - `Main_Class`: Category/main group/class
+
+The hierarchical model `fuss_COVARIATE_mcmc()` outputs a list with many components.
 
 ### Validation Visualization
 The `plot_VALIDATION()` function creates a density plot with jittered points colored by assigned group:
