@@ -31,63 +31,37 @@ fuss_COVARIATE_mcmc(
 
 \item{varCLASS}{Name of the categorical grouping variable.}
 
-\item{varID}{Optional name of the ID variable (for tracking observations).}
+\item{varID}{Optional name of the ID variable.}
 
-\item{K}{Optional number of components. If NULL, detected automatically using enhanced mode detection.}
+\item{K}{Optional number of components. If NULL, auto-detected.}
 
-\item{out_dir}{Optional output directory for CSV files. If NULL, returns data frame only.}
+\item{out_dir}{Optional output directory for CSV files.}
 
 \item{n_iter}{Number of MCMC iterations (default: 10000).}
 
 \item{burnin}{Number of burn-in iterations (default: 2000).}
 
-\item{proposal_sd}{Proposal standard deviation for Metropolis-Hastings (default: 0.15).}
+\item{proposal_sd}{Proposal standard deviation (default: 0.15).}
 
-\item{adaptive}{Logical; if TRUE, adapt proposal variance during burn-in (default: TRUE).}
+\item{adaptive}{Logical; adapt proposal variance (default: TRUE).}
 
 \item{alpha0}{Shape parameter for Inverse Gamma prior (default: 3.0).}
 
 \item{beta0}{Scale parameter for Inverse Gamma prior (default: 2.0).}
 
-\item{alpha_dirichlet}{Concentration parameter for Dirichlet prior (default: 5.0).}
+\item{alpha_dirichlet}{Concentration parameter (default: 5.0).}
 
-\item{method}{Bandwidth selection method for mode detection (default: "sj-dpi").}
+\item{method}{Bandwidth selection method (default: "sj-dpi").}
 
-\item{sj_adjust}{Adjustment factor for bandwidth (default: 0.5).}
+\item{sj_adjust}{Adjustment factor (default: 0.5).}
 
-\item{within}{Merging radius for grouping close modes (default: 1.0).}
+\item{within}{Merging radius (default: 1.0).}
 
-\item{seed}{Random seed for reproducibility (default: 123).}
+\item{seed}{Random seed (default: 123).}
 }
 \value{
-A list with components:
-  \item{y}{Original response values.}
-  \item{ID}{Observation identifiers.}
-  \item{Main_Class}{Original categorical variable.}
-  \item{prob_matrix}{Data frame with per-observation component probabilities (Group_1, Group_2, ...).}
-  \item{Assigned_Group}{Most likely component assignment for each observation.}
-  \item{mu}{Posterior mean of category-specific means (C x K matrix).}
-  \item{sigma2}{Posterior mean of category-specific variances (C x K matrix).}
-  \item{pi}{Posterior mean of category-specific weights (C x K matrix).}
-  \item{K}{Number of components.}
-  \item{C}{Number of categories.}
-  \item{category_levels}{Levels of the categorical variable.}
-  \item{mcmc_samples}{Full MCMC samples (for diagnostics).}
+A list with components.
 }
 \description{
-Fits a Bayesian Gaussian mixture model where the number of components K
-is shared across categories, but each category has its own means,
-variances, and mixing weights. This is a true mixture model that treats
-the categorical variable as a covariate.
-}
-\examples{
-\dontrun{
-library(MultiModalR)
-df <- multimodal_dummy
-result <- fuss_COVARIATE_mcmc(df, "Value", "Category", K = 3)
-summary(result)
-plot(result)
-head(result$prob_matrix)
-table(result$Assigned_Group, df$Subpopulation)
-}
+Unified Bayesian Mixture Model with Category-Specific Parameters
 }

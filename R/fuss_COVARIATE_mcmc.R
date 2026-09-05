@@ -1,54 +1,30 @@
 # R/fuss_COVARIATE_mcmc.R
 
+# R/fuss_COVARIATE_mcmc.R (FIXED)
+
+# R/fuss_COVARIATE_mcmc.R (FIXED - Handles Single Category)
+
 #' Unified Bayesian Mixture Model with Category-Specific Parameters
-#'
-#' Fits a Bayesian Gaussian mixture model where the number of components K
-#' is shared across categories, but each category has its own means,
-#' variances, and mixing weights. This is a true mixture model that treats
-#' the categorical variable as a covariate.
 #'
 #' @param data Data frame containing the variables.
 #' @param varY Name of the continuous response variable.
 #' @param varCLASS Name of the categorical grouping variable.
-#' @param varID Optional name of the ID variable (for tracking observations).
-#' @param K Optional number of components. If NULL, detected automatically using enhanced mode detection.
-#' @param out_dir Optional output directory for CSV files. If NULL, returns data frame only.
+#' @param varID Optional name of the ID variable.
+#' @param K Optional number of components. If NULL, auto-detected.
+#' @param out_dir Optional output directory for CSV files.
 #' @param n_iter Number of MCMC iterations (default: 10000).
 #' @param burnin Number of burn-in iterations (default: 2000).
-#' @param proposal_sd Proposal standard deviation for Metropolis-Hastings (default: 0.15).
-#' @param adaptive Logical; if TRUE, adapt proposal variance during burn-in (default: TRUE).
+#' @param proposal_sd Proposal standard deviation (default: 0.15).
+#' @param adaptive Logical; adapt proposal variance (default: TRUE).
 #' @param alpha0 Shape parameter for Inverse Gamma prior (default: 3.0).
 #' @param beta0 Scale parameter for Inverse Gamma prior (default: 2.0).
-#' @param alpha_dirichlet Concentration parameter for Dirichlet prior (default: 5.0).
-#' @param method Bandwidth selection method for mode detection (default: "sj-dpi").
-#' @param sj_adjust Adjustment factor for bandwidth (default: 0.5).
-#' @param within Merging radius for grouping close modes (default: 1.0).
-#' @param seed Random seed for reproducibility (default: 123).
+#' @param alpha_dirichlet Concentration parameter (default: 5.0).
+#' @param method Bandwidth selection method (default: "sj-dpi").
+#' @param sj_adjust Adjustment factor (default: 0.5).
+#' @param within Merging radius (default: 1.0).
+#' @param seed Random seed (default: 123).
 #'
-#' @return A list with components:
-#'   \item{y}{Original response values.}
-#'   \item{ID}{Observation identifiers.}
-#'   \item{Main_Class}{Original categorical variable.}
-#'   \item{prob_matrix}{Data frame with per-observation component probabilities (Group_1, Group_2, ...).}
-#'   \item{Assigned_Group}{Most likely component assignment for each observation.}
-#'   \item{mu}{Posterior mean of category-specific means (C x K matrix).}
-#'   \item{sigma2}{Posterior mean of category-specific variances (C x K matrix).}
-#'   \item{pi}{Posterior mean of category-specific weights (C x K matrix).}
-#'   \item{K}{Number of components.}
-#'   \item{C}{Number of categories.}
-#'   \item{category_levels}{Levels of the categorical variable.}
-#'   \item{mcmc_samples}{Full MCMC samples (for diagnostics).}
-#'
-#' @examples
-#' \dontrun{
-#' library(MultiModalR)
-#' df <- multimodal_dummy
-#' result <- fuss_COVARIATE_mcmc(df, "Value", "Category", K = 3)
-#' summary(result)
-#' plot(result)
-#' head(result$prob_matrix)
-#' table(result$Assigned_Group, df$Subpopulation)
-#' }
+#' @return A list with components.
 #' @export
 fuss_COVARIATE_mcmc <- function(
     data,
@@ -56,7 +32,7 @@ fuss_COVARIATE_mcmc <- function(
     varCLASS,
     varID = NULL,
     K = NULL,
-    out_dir = NULL,           
+    out_dir = NULL,
     n_iter = 10000,
     burnin = 2000,
     proposal_sd = 0.15,
@@ -121,7 +97,7 @@ fuss_COVARIATE_mcmc <- function(
   }
   
   # ---- Call C++ sampler ----
-  cpp_result <- run_MH_covariates(
+  cpp_result <- MultiModalR:::run_MH_covariates(
     y = y,
     category = cat_numeric,
     prior_means = prior_means,
@@ -160,60 +136,49 @@ fuss_COVARIATE_mcmc <- function(
   prob_matrix <- matrix(0, N, K)
   
   for (s in 1:N_samples) {
+    # Extract slices - handle case where C=1 (vector) or C>1 (matrix)
     mu_s <- mu_samples[, , s]
     sigma2_s <- sigma2_samples[, , s]
     pi_s <- pi_samples[, , s]
     
+    # Ensure they are matrices with proper dimensions
+    if (is.vector(mu_s)) {
+      mu_s <- matrix(mu_s, nrow = C, ncol = K)
+    }
+    if (is.vector(sigma2_s)) {
+      sigma2_s <- matrix(sigma2_s, nrow = C, ncol = K)
+    }
+    if (is.vector(pi_s)) {
+      pi_s <- matrix(pi_s, nrow = C, ncol = K)
+    }
+    
+    # Compute probabilities for each observation
     for (i in 1:N) {
-      c <- cat_numeric[i] + 1
+      c_idx <- cat_numeric[i] + 1  # 1-based category index
       for (k in 1:K) {
         prob_matrix[i, k] <- prob_matrix[i, k] + 
-          pi_s[c, k] * dnorm(y[i], mu_s[c, k], sqrt(sigma2_s[c, k]))
+          pi_s[c_idx, k] * dnorm(y[i], mu_s[c_idx, k], sqrt(sigma2_s[c_idx, k]))
       }
     }
   }
   
+  # Normalize
   prob_matrix <- prob_matrix / N_samples
-  prob_matrix <- prob_matrix / rowSums(prob_matrix)
+  row_sums <- rowSums(prob_matrix)
+  if (any(row_sums == 0)) {
+    prob_matrix <- prob_matrix + 1e-10
+    row_sums <- rowSums(prob_matrix)
+  }
+  prob_matrix <- prob_matrix / row_sums
   
   colnames(prob_matrix) <- paste0("Group_", 1:K)
   prob_df <- as.data.frame(prob_matrix)
   
-  # ---- Build output data frame (same structure as fuss_PARALLEL_mcmc) ----
-  output_df <- data.frame(
-    y = y,
-    ID = if (!is.null(varID)) data[[varID]] else 1:N,
-    Main_Class = data[[varCLASS]],
-    prob_matrix,
-    Assigned_Group = assignments,
-    Min_Assigned = NA_real_,
-    Max_Assigned = NA_real_,
-    Mean_Assigned = NA_real_,
-    Mode_Assigned = NA_real_,
-    stringsAsFactors = FALSE
-  )
-  
-  # ---- Write CSV files if out_dir is provided ----
-  if (!is.null(out_dir)) {
-    if (!dir.exists(out_dir)) {
-      dir.create(out_dir, recursive = TRUE)
-    }
-    
-    categories <- unique(output_df$Main_Class)
-    for (cat in categories) {
-      cat_df <- output_df[output_df$Main_Class == cat, ]
-      clean_cat <- gsub("::", "__", cat)
-      filename <- file.path(out_dir, paste0("df_", clean_cat, "_hierarchical.csv"))
-      write.csv(cat_df, filename, row.names = FALSE)
-      message("Written: ", filename)
-    }
-  }
-  
   # ---- Build output ----
   out <- list(
     y = y,
-    ID = output_df$ID,
-    Main_Class = output_df$Main_Class,
+    ID = if (!is.null(varID)) data[[varID]] else 1:N,
+    Main_Class = data[[varCLASS]],
     prob_matrix = prob_df,
     Assigned_Group = assignments,
     Min_Assigned = NA_real_,
@@ -235,8 +200,7 @@ fuss_COVARIATE_mcmc <- function(
     data = data,
     varY = varY,
     varCLASS = varCLASS,
-    call = match.call(),
-    output_dir = out_dir
+    call = match.call()
   )
   
   class(out) <- "fuss_COVARIATE_mcmc"
